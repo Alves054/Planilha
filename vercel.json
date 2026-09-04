@@ -7,7 +7,7 @@
     },
     "backend": {
       "root": "backend",
-      "entrypoint": "dist/handler.js"
+      "entrypoint": "api/index.js"
     }
   },
   "rewrites": [
