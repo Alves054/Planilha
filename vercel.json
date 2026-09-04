@@ -7,7 +7,7 @@
     },
     "backend": {
       "root": "backend",
-      "entrypoint": "src/handler.ts"
+      "entrypoint": "dist/handler.js"
     }
   },
   "rewrites": [
