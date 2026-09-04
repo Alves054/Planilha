@@ -46,7 +46,8 @@ export function App() {
       setGarminStatus(conn);
     } catch (err: any) {
       console.error('Erro ao carregar dados:', err);
-      setError('Não foi possível conectar ao servidor backend.');
+      const errMsg = err.response?.data?.error || err.message || 'Não foi possível conectar ao servidor backend.';
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
