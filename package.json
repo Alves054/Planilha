@@ -1,0 +1,11 @@
+{
+  "name": "pace-training",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pace Training - Plataforma de Gerenciamento, Assistente Pace AI & Integracao Garmin",
+  "scripts": {
+    "dev": "cd backend && npm run dev",
+    "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "vercel-build": "cd backend && npm install && npx prisma generate && npm run build && cd ../frontend && npm install && npm run build"
+  }
+}
