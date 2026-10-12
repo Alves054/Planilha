@@ -193,3 +193,16 @@ model WorkoutTemplate {
   workoutData String   // JSON string
   createdAt   DateTime @default(now())
 }
+
+model TrainingCycle {
+  id           String   @id @default(uuid())
+  coachId      String?
+  name         String
+  category     String   @default("5KM")
+  targetPace   String?
+  durationDays Int      @default(30)
+  description  String?
+  weeksData    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

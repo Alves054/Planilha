@@ -9,6 +9,16 @@ import { getGarminAuthUrl, handleGarminCallback, disconnectGarmin } from './cont
 import { importPdfWorkouts } from './controllers/pdfController.js';
 import { importImageWorkouts } from './controllers/imageController.js';
 import { sendMessage, listConversations, getConversationDetails, createConversation, deleteConversation } from './controllers/aiController.js';
+import {
+  listCycles,
+  getCycleById,
+  createCycle,
+  updateCycle,
+  deleteCycle,
+  duplicateCycle,
+  applyCycleToAthlete,
+  saveWeekAsCycle
+} from './controllers/cycleController.js';
 
 // Multer — upload em memória para PDF e imagens
 const upload = multer({
@@ -28,6 +38,16 @@ routes.post('/athletes', createAthlete);
 routes.put('/athletes/:id', updateAthlete);
 routes.put('/athletes/:id/pace-zones', updatePaceZones);
 routes.delete('/athletes/:id', deleteAthlete);
+
+// Ciclos e Planejamento de Treino (Periodização / 30 Dias / 5km Sub 16)
+routes.get('/cycles', listCycles);
+routes.get('/cycles/:id', getCycleById);
+routes.post('/cycles', createCycle);
+routes.put('/cycles/:id', updateCycle);
+routes.delete('/cycles/:id', deleteCycle);
+routes.post('/cycles/:id/duplicate', duplicateCycle);
+routes.post('/cycles/:id/apply', applyCycleToAthlete);
+routes.post('/cycles/save-from-week', saveWeekAsCycle);
 
 // Semanas
 routes.get('/weeks/current', optionalAuthMiddleware, getCurrentWeek);

@@ -229,3 +229,53 @@ export interface AthleteItem {
     status: string;
   } | null;
 }
+
+export interface CycleWorkoutStep {
+  stepType: 'WARMUP' | 'RUN' | 'RECOVERY' | 'COOL_DOWN' | 'REST';
+  durationType: 'TIME' | 'DISTANCE';
+  durationValue: number;
+  targetType?: 'PACE' | 'HR_ZONE' | 'OPEN';
+  targetMin?: string;
+  targetMax?: string;
+  notes?: string;
+}
+
+export interface CycleWorkout {
+  name: string;
+  category: WorkoutCategory;
+  sport: string;
+  time?: string;
+  period?: WorkoutPeriod;
+  targetDistanceKm?: number;
+  targetPaceMin?: string;
+  targetPaceMax?: string;
+  repeatCount?: number;
+  notes?: string;
+  steps?: CycleWorkoutStep[];
+}
+
+export interface CycleDay {
+  dayOffset: number;
+  dayOfWeek: string;
+  workouts: CycleWorkout[];
+}
+
+export interface CycleWeek {
+  weekNumber: number;
+  title: string;
+  days: CycleDay[];
+}
+
+export interface TrainingCycleItem {
+  id: string;
+  coachId?: string | null;
+  name: string;
+  category: string;
+  targetPace?: string | null;
+  durationDays: number;
+  description?: string | null;
+  weeksData: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+

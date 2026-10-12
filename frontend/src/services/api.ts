@@ -251,3 +251,67 @@ export const resetWorkoutResultApi = async (workoutId: string) => {
   const res = await api.delete(`/workouts/${workoutId}/result`);
   return res.data;
 };
+
+// ==========================================
+// Ciclos e Modelos de Treino (Periodização)
+// ==========================================
+export const listCyclesApi = async (): Promise<import('../types/workout').TrainingCycleItem[]> => {
+  const res = await api.get('/cycles');
+  return res.data;
+};
+
+export const getCycleByIdApi = async (id: string): Promise<import('../types/workout').TrainingCycleItem> => {
+  const res = await api.get(`/cycles/${id}`);
+  return res.data;
+};
+
+export const createCycleApi = async (payload: {
+  name: string;
+  category?: string;
+  targetPace?: string;
+  durationDays?: number;
+  description?: string;
+  weeksData: any;
+}) => {
+  const res = await api.post('/cycles', payload);
+  return res.data;
+};
+
+export const updateCycleApi = async (id: string, payload: {
+  name?: string;
+  category?: string;
+  targetPace?: string;
+  durationDays?: number;
+  description?: string;
+  weeksData?: any;
+}) => {
+  const res = await api.put(`/cycles/${id}`, payload);
+  return res.data;
+};
+
+export const deleteCycleApi = async (id: string) => {
+  const res = await api.delete(`/cycles/${id}`);
+  return res.data;
+};
+
+export const duplicateCycleApi = async (id: string) => {
+  const res = await api.post(`/cycles/${id}/duplicate`);
+  return res.data;
+};
+
+export const applyCycleToAthleteApi = async (cycleId: string, athleteId: string, startDate?: string) => {
+  const res = await api.post(`/cycles/${cycleId}/apply`, { athleteId, startDate });
+  return res.data;
+};
+
+export const saveWeekAsCycleApi = async (payload: {
+  weekId: string;
+  cycleName: string;
+  category?: string;
+  targetPace?: string;
+  description?: string;
+}) => {
+  const res = await api.post('/cycles/save-from-week', payload);
+  return res.data;
+};
+

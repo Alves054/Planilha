@@ -4,17 +4,23 @@ import {
   Calendar, Trash2, Edit3, CheckCircle2, AlertCircle,
   ChevronRight, ArrowRight, X, Shield, Plus, Loader2,
   Camera, Flame, Trophy, TrendingUp, Sparkles, Activity,
-  Clock, Heart, ExternalLink, Image as ImageIcon, RefreshCw, Eye
+  Clock, Heart, ExternalLink, Image as ImageIcon, RefreshCw, Eye,
+  Copy, Target, BookOpen, Layers
 } from 'lucide-react';
-import { AthleteItem, WorkoutResultItem } from '../../types/workout';
+import { AthleteItem, WorkoutResultItem, TrainingCycleItem, CycleWeek } from '../../types/workout';
 import {
   listAthletesApi,
   createAthleteApi,
   updateAthleteApi,
   deleteAthleteApi,
   getWorkoutResultsApi,
-  resetWorkoutResultApi
+  resetWorkoutResultApi,
+  listCyclesApi,
+  duplicateCycleApi,
+  deleteCycleApi
 } from '../../services/api';
+import { ApplyCycleModal } from './ApplyCycleModal';
+import { CycleBuilderModal } from './CycleBuilderModal';
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -29,14 +35,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onSelectAthleteForTraining,
   selectedAthleteId
 }) => {
-  const [activeTab, setActiveTab] = useState<'athletes' | 'results'>('athletes');
+  const [activeTab, setActiveTab] = useState<'athletes' | 'cycles' | 'results'>('athletes');
   const [athletes, setAthletes] = useState<AthleteItem[]>([]);
   const [results, setResults] = useState<WorkoutResultItem[]>([]);
+  const [cycles, setCycles] = useState<TrainingCycleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [loadingCycles, setLoadingCycles] = useState(false);
   const [search, setSearch] = useState('');
   const [filterAthleteId, setFilterAthleteId] = useState<string>('ALL');
   const [error, setError] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  // Modais de Ciclo de Treino
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [applyCycleId, setApplyCycleId] = useState<string | undefined>(undefined);
+  const [applyAthleteId, setApplyAthleteId] = useState<string | undefined>(undefined);
+  const [isCycleBuilderOpen, setIsCycleBuilderOpen] = useState(false);
+  const [editingCycle, setEditingCycle] = useState<TrainingCycleItem | null>(null);
 
   // Modal de Criar/Editar Aluno
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -82,18 +98,70 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const fetchCycles = async () => {
+    try {
+      setLoadingCycles(true);
+      const res = await listCyclesApi();
+      setCycles(res || []);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoadingCycles(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       fetchAthletes();
       fetchResults(filterAthleteId);
+      fetchCycles();
     }
   }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && activeTab === 'results') {
       fetchResults(filterAthleteId);
+    } else if (isOpen && activeTab === 'cycles') {
+      fetchCycles();
     }
   }, [activeTab, filterAthleteId]);
+
+  const handleOpenApplyCycle = (cycleId?: string, athleteId?: string) => {
+    setApplyCycleId(cycleId);
+    setApplyAthleteId(athleteId);
+    setIsApplyModalOpen(true);
+  };
+
+  const handleDuplicateCycle = async (id: string) => {
+    try {
+      await duplicateCycleApi(id);
+      await fetchCycles();
+      setSuccessToast('Ciclo duplicado com sucesso!');
+      setTimeout(() => setSuccessToast(null), 4000);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Erro ao duplicar ciclo.');
+    }
+  };
+
+  const handleDeleteCycle = async (id: string, cycleName: string) => {
+    if (confirm(`Tem certeza que deseja excluir o ciclo "${cycleName}" da sua biblioteca?`)) {
+      try {
+        await deleteCycleApi(id);
+        await fetchCycles();
+        setSuccessToast(`Ciclo "${cycleName}" removido.`);
+        setTimeout(() => setSuccessToast(null), 4000);
+      } catch (err: any) {
+        alert(err.response?.data?.error || 'Erro ao excluir ciclo.');
+      }
+    }
+  };
+
+  const handleCycleActionSuccess = (msg: string) => {
+    setSuccessToast(msg);
+    fetchCycles();
+    fetchAthletes();
+    setTimeout(() => setSuccessToast(null), 5000);
+  };
 
   if (!isOpen) return null;
 
@@ -229,7 +297,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
 
-          {/* Abas e Botão Novo Aluno */}
+          {/* Abas e Botão Novo Aluno / Novo Ciclo */}
           <div className="flex items-center gap-2.5">
             <div className="flex p-1 bg-zinc-900 border border-zinc-800 rounded-2xl">
               <button
@@ -242,6 +310,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               >
                 <Users className="w-3.5 h-3.5" />
                 <span>Alunos ({athletes.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('cycles')}
+                className={`py-1.5 px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === 'cycles'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black shadow-md shadow-orange-500/30 font-black'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${activeTab === 'cycles' ? 'text-black' : 'text-amber-400'}`} />
+                <span>Ciclos & Periodização</span>
+                {cycles.length > 0 && (
+                  <span className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${
+                    activeTab === 'cycles' ? 'bg-black/20 text-black font-black' : 'bg-amber-500/30 text-amber-200'
+                  }`}>
+                    {cycles.length}
+                  </span>
+                )}
               </button>
 
               <button
@@ -262,13 +349,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </button>
             </div>
 
-            <button
-              onClick={handleOpenCreate}
-              className="py-2 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all cursor-pointer shrink-0"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Novo Aluno</span>
-            </button>
+            {activeTab === 'cycles' ? (
+              <button
+                onClick={() => {
+                  setEditingCycle(null);
+                  setIsCycleBuilderOpen(true);
+                }}
+                className="py-2 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-xs flex items-center gap-2 shadow-lg shadow-orange-500/25 transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4 text-black" />
+                <span>Novo Ciclo (30d)</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleOpenCreate}
+                className="py-2 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all cursor-pointer shrink-0"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Novo Aluno</span>
+              </button>
+            )}
 
             <button
               onClick={onClose}
@@ -480,6 +580,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </button>
 
                           <button
+                            onClick={() => handleOpenApplyCycle(undefined, athlete.id)}
+                            className="w-full py-2 px-3.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-red-500/15 hover:from-amber-500/25 hover:to-orange-500/25 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                            <span>⚡ Aplicar Ciclo de Treino (30d)</span>
+                          </button>
+
+                          <button
                             onClick={() => {
                               setFilterAthleteId(athlete.id);
                               setActiveTab('results');
@@ -490,6 +598,207 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <span>Ver Resultados & Fotos do Aluno</span>
                           </button>
                         </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Notificação Toast */}
+        {successToast && (
+          <div className="absolute top-20 right-8 z-50 p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs shadow-2xl flex items-center gap-2.5 animate-fadeIn border border-emerald-400/40">
+            <CheckCircle2 className="w-4 h-4 text-white shrink-0" />
+            <span>{successToast}</span>
+          </div>
+        )}
+
+        {/* CONTEÚDO DA ABA: CICLOS & PERIODIZAÇÃO */}
+        {activeTab === 'cycles' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Header de Ações dos Ciclos */}
+            <div className="p-4 sm:px-8 border-b border-zinc-800/80 bg-zinc-900/30 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  Biblioteca de Periodização & Modelos de Treino (30 Dias)
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Modelos completos com 4 semanas de treinos estruturados, tiros e volumes. Aplique em qualquer aluno com 1 clique.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchCycles}
+                  title="Atualizar Lista"
+                  className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingCycles ? 'animate-spin text-amber-400' : ''}`} />
+                </button>
+
+                <button
+                  onClick={() => {
+                    setEditingCycle(null);
+                    setIsCycleBuilderOpen(true);
+                  }}
+                  className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-xs flex items-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-black" />
+                  <span>Novo Ciclo Personalizado</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Lista dos Ciclos */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+              {loadingCycles ? (
+                <div className="flex flex-col items-center justify-center py-20 text-zinc-400 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                  <p className="text-xs font-medium">Carregando modelos de periodização...</p>
+                </div>
+              ) : cycles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-zinc-500 text-center max-w-md mx-auto">
+                  <Layers className="w-12 h-12 text-zinc-700 mb-3" />
+                  <p className="text-base font-bold text-zinc-300">Nenhum ciclo cadastrado ainda</p>
+                  <p className="text-xs text-zinc-500 mt-1 mb-4">
+                    Crie seu primeiro modelo de planejamento de 30 dias para economizar tempo na prescrição.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEditingCycle(null);
+                      setIsCycleBuilderOpen(true);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-amber-500 text-black font-black text-xs cursor-pointer"
+                  >
+                    + Criar Ciclo 5km 16min
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {cycles.map(cycle => {
+                    let parsedWeeks: CycleWeek[] = [];
+                    try {
+                      parsedWeeks = JSON.parse(cycle.weeksData || '[]');
+                    } catch (e) {
+                      parsedWeeks = [];
+                    }
+
+                    const totalWorkouts = parsedWeeks.reduce((acc, w) => {
+                      return acc + (w.days?.reduce((dAcc, d) => dAcc + (d.workouts?.length || 0), 0) || 0);
+                    }, 0);
+
+                    const totalVolumeKm = parsedWeeks.reduce((acc, w) => {
+                      return acc + (w.days?.reduce((dAcc, d) => {
+                        return dAcc + (d.workouts?.reduce((wAcc, wo) => wAcc + (wo.targetDistanceKm || 0), 0) || 0);
+                      }, 0) || 0);
+                    }, 0);
+
+                    return (
+                      <div
+                        key={cycle.id}
+                        className="p-5 rounded-3xl bg-zinc-900/60 border border-zinc-800/80 hover:border-amber-500/40 hover:bg-zinc-900/90 transition-all flex flex-col justify-between group shadow-xl"
+                      >
+                        <div>
+                          {/* Badges superiores */}
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                              <Target className="w-3 h-3 text-amber-400" />
+                              {cycle.category || '5KM'}
+                            </span>
+
+                            <div className="flex items-center gap-1.5">
+                              {cycle.targetPace && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-zinc-800 text-amber-400 border border-zinc-700">
+                                  {cycle.targetPace}
+                                </span>
+                              )}
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-800/80 text-zinc-300 border border-zinc-700">
+                                {cycle.durationDays || 30}d ({parsedWeeks.length} sem)
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Título & Descrição */}
+                          <h4 className="text-base font-black text-white group-hover:text-amber-400 transition-colors leading-snug mb-1.5">
+                            {cycle.name}
+                          </h4>
+
+                          {cycle.description && (
+                            <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed mb-4">
+                              {cycle.description}
+                            </p>
+                          )}
+
+                          {/* Resumo Semanal */}
+                          <div className="p-3 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 mb-4 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-zinc-500 font-bold uppercase text-[10px]">Treinos Prescritos</span>
+                              <span className="text-white font-extrabold">{totalWorkouts} treinos</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-zinc-500 font-bold uppercase text-[10px]">Volume Total Est.</span>
+                              <span className="text-emerald-400 font-extrabold">~{Math.round(totalVolumeKm)} km</span>
+                            </div>
+
+                            <div className="pt-2 border-t border-zinc-800/60 grid grid-cols-4 gap-1 text-center">
+                              {parsedWeeks.slice(0, 4).map((w, idx) => (
+                                <div key={idx} className="bg-zinc-900/90 py-1 px-1 rounded-lg">
+                                  <p className="text-[9px] text-zinc-500 font-bold">Sem {w.weekNumber}</p>
+                                  <p className="text-[11px] font-black text-amber-400">
+                                    {w.days?.reduce((acc, d) => acc + (d.workouts?.length || 0), 0) || 0}t
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ações do Ciclo */}
+                        <div className="space-y-2 pt-2 border-t border-zinc-800/60">
+                          <button
+                            onClick={() => handleOpenApplyCycle(cycle.id, undefined)}
+                            className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 transition-all cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-black" />
+                            <span>⚡ Aplicar em Aluno (1-Clique)</span>
+                          </button>
+
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingCycle(cycle);
+                                setIsCycleBuilderOpen(true);
+                              }}
+                              className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                              title="Editar treinos deste ciclo"
+                            >
+                              <Edit3 className="w-3 h-3 text-zinc-400" />
+                              <span>Editar</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDuplicateCycle(cycle.id)}
+                              className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                              title="Duplicar para criar variação"
+                            >
+                              <Copy className="w-3 h-3 text-zinc-400" />
+                              <span>Duplicar</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteCycle(cycle.id, cycle.name)}
+                              className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-red-950/40 text-zinc-400 hover:text-red-400 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                              title="Excluir da biblioteca"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Excluir</span>
+                            </button>
+                          </div>
+                        </div>
+
                       </div>
                     );
                   })}
@@ -890,6 +1199,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         </div>
       )}
+
+      {/* MODAL DE APLICAR CICLO AO ALUNO */}
+      <ApplyCycleModal
+        isOpen={isApplyModalOpen}
+        onClose={() => setIsApplyModalOpen(false)}
+        cycles={cycles}
+        athletes={athletes}
+        initialCycleId={applyCycleId}
+        initialAthleteId={applyAthleteId}
+        onSuccess={handleCycleActionSuccess}
+      />
+
+      {/* MODAL DE CONSTRUÇÃO / EDIÇÃO DO CICLO */}
+      <CycleBuilderModal
+        isOpen={isCycleBuilderOpen}
+        onClose={() => setIsCycleBuilderOpen(false)}
+        cycleToEdit={editingCycle}
+        onSuccess={handleCycleActionSuccess}
+      />
     </div>
   );
 };
