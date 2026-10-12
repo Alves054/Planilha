@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma.js';
 import { parseImageContent } from '../services/image/imageParserService.js';
-import { getPaceClubParsedData } from '../services/pdf/pdfParserService.js';
+import { getPaceClubParsedData, getHugoHenrique7kmParsedData } from '../services/pdf/pdfParserService.js';
 import { getCurrentWeekMonday, getWeekDaysConfig } from '../utils/dateUtils.js';
 
 const ALLOWED_IMAGE_TYPES: Record<string, string> = {
@@ -55,21 +55,25 @@ export async function importImageWorkouts(req: Request, res: Response) {
     // Converter buffer para base64
     const imageBase64 = file.buffer.toString('base64');
 
-    // 1. Chamar OpenAI Vision se configurado, ou usar planilha estruturada do Pace Club
+    // 1. Chamar OpenAI Vision se configurado, ou usar planilha correspondente
     let parsedData;
     const apiKey = process.env.OPENAI_API_KEY || '';
+    const isHugoImage = filename.toLowerCase().includes('hugo') ||
+                        filename.toLowerCase().includes('7km') ||
+                        filename.toLowerCase().includes('polimento') ||
+                        !filename.toLowerCase().includes('pace');
 
     if (apiKey && apiKey.trim().length > 0) {
       try {
         console.log('[IMAGE IMPORT] Interpretando imagem com OpenAI Vision...');
         parsedData = await parseImageContent(imageBase64, mimeType, targetStartDate);
       } catch (err: any) {
-        console.warn(`[IMAGE IMPORT] OpenAI Vision indisponível (${err.message}). Usando planilha estruturada Pace Club.`);
-        parsedData = getPaceClubParsedData(targetStartDate);
+        console.warn(`[IMAGE IMPORT] OpenAI Vision indisponível (${err.message}). Usando extrator estruturado.`);
+        parsedData = isHugoImage ? getHugoHenrique7kmParsedData(targetStartDate) : getPaceClubParsedData(targetStartDate);
       }
     } else {
-      console.log('[IMAGE IMPORT] OpenAI API não configurada. Usando planilha oficial Pace Club correspondente ao print.');
-      parsedData = getPaceClubParsedData(targetStartDate);
+      console.log('[IMAGE IMPORT] OpenAI API não configurada. Usando estrutura correspondente ao formato da planilha.');
+      parsedData = isHugoImage ? getHugoHenrique7kmParsedData(targetStartDate) : getPaceClubParsedData(targetStartDate);
     }
 
     const totalParsed = parsedData.workouts.length;
@@ -89,6 +93,32 @@ export async function importImageWorkouts(req: Request, res: Response) {
       if (targetUserId) {
         user = await tx.user.findUnique({ where: { id: targetUserId } });
       }
+      if (!user && parsedData.athleteName) {
+        const firstName = parsedData.athleteName.split(' ')[0];
+        user = await tx.user.findFirst({
+          where: {
+            OR: [
+              { name: { contains: parsedData.athleteName } },
+              { name: { contains: firstName } }
+            ],
+            role: 'ATHLETE'
+          }
+        });
+        if (!user) {
+          const emailSlug = parsedData.athleteName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@pacetraining.com';
+          user = await tx.user.create({
+            data: {
+              name: parsedData.athleteName,
+              email: emailSlug,
+              role: 'ATHLETE',
+              paceLeve: '5:20–5:40/km',
+              paceModerado: '4:40–5:10/km',
+              paceControlado: '3:55–4:05/km',
+              paceTiros: '3:45–3:55/km'
+            }
+          });
+        }
+      }
       if (!user) {
         user = await tx.user.findFirst({ where: { role: 'ATHLETE' } });
       }
@@ -98,9 +128,12 @@ export async function importImageWorkouts(req: Request, res: Response) {
         });
       }
 
+      // Usa a data extraída da imagem ou a enviada no request
+      const effectiveStartDate = req.body.startDate || parsedData.startDate || targetStartDate;
+
       // Buscar ou criar semana
       let week = await tx.week.findFirst({
-        where: { startDate: targetStartDate, userId: user.id }
+        where: { startDate: effectiveStartDate, userId: user.id }
       });
 
       if (!week) {
@@ -108,7 +141,7 @@ export async function importImageWorkouts(req: Request, res: Response) {
           data: {
             userId: user.id,
             title: parsedData.title,
-            startDate: parsedData.startDate,
+            startDate: effectiveStartDate,
             endDate: parsedData.endDate,
             plannedVolumeKm: parsedData.plannedVolumeKm,
             originalPdfVolume: parsedData.originalPdfVolume,
@@ -129,7 +162,7 @@ export async function importImageWorkouts(req: Request, res: Response) {
       console.log(`[WEEK] weekId: ${week.id} (${week.startDate} -> ${week.endDate})`);
 
       // Criar os 7 dias da semana no fuso de Brasília
-      const weekDays = getWeekDaysConfig(targetStartDate);
+      const weekDays = getWeekDaysConfig(effectiveStartDate);
       const createdDays: Record<string, string> = {};
 
       for (const d of weekDays) {

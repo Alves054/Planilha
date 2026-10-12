@@ -67,6 +67,32 @@ export async function importPdfWorkouts(req: Request, res: Response) {
       if (targetUserId) {
         user = await tx.user.findUnique({ where: { id: targetUserId } });
       }
+      if (!user && parsedData.athleteName) {
+        const firstName = parsedData.athleteName.split(' ')[0];
+        user = await tx.user.findFirst({
+          where: {
+            OR: [
+              { name: { contains: parsedData.athleteName } },
+              { name: { contains: firstName } }
+            ],
+            role: 'ATHLETE'
+          }
+        });
+        if (!user) {
+          const emailSlug = parsedData.athleteName.toLowerCase().replace(/[^a-z0-9]/g, '') + '@pacetraining.com';
+          user = await tx.user.create({
+            data: {
+              name: parsedData.athleteName,
+              email: emailSlug,
+              role: 'ATHLETE',
+              paceLeve: '5:20–5:40/km',
+              paceModerado: '4:40–5:10/km',
+              paceControlado: '3:55–4:05/km',
+              paceTiros: '3:45–3:55/km'
+            }
+          });
+        }
+      }
       if (!user) {
         user = await tx.user.findFirst({ where: { role: 'ATHLETE' } });
       }
@@ -76,9 +102,12 @@ export async function importPdfWorkouts(req: Request, res: Response) {
         });
       }
 
+      // Usa a data extraída do PDF ou a enviada no request
+      const effectiveStartDate = req.body.startDate || parsedData.startDate || targetStartDate;
+
       // Buscar semana existente ou criar nova
       let week = await tx.week.findFirst({
-        where: { startDate: targetStartDate, userId: user.id }
+        where: { startDate: effectiveStartDate, userId: user.id }
       });
 
       if (!week) {
@@ -86,7 +115,7 @@ export async function importPdfWorkouts(req: Request, res: Response) {
           data: {
             userId: user.id,
             title: parsedData.title,
-            startDate: parsedData.startDate,
+            startDate: effectiveStartDate,
             endDate: parsedData.endDate,
             plannedVolumeKm: parsedData.plannedVolumeKm,
             originalPdfVolume: parsedData.originalPdfVolume,
@@ -107,7 +136,7 @@ export async function importPdfWorkouts(req: Request, res: Response) {
       console.log(`[WEEK] ${week.id} (${week.startDate} -> ${week.endDate})`);
 
       // Criar os 7 dias da semana no fuso de Brasília
-      const weekDays = getWeekDaysConfig(targetStartDate);
+      const weekDays = getWeekDaysConfig(effectiveStartDate);
       const createdDays: Record<string, string> = {};
 
       for (const d of weekDays) {

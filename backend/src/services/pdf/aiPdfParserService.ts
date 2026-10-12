@@ -36,41 +36,49 @@ export async function parsePdfWithAI(
 
   const systemPrompt = `Você é um especialista em interpretar planilhas de treino de corrida brasileiras.
 Analise o texto extraído de uma planilha semanal de treino e retorne SOMENTE um JSON válido, sem markdown.
+Identifique também o atleta ("Nome: ...") e o período/datas ("05/10 a 11/10" ou datas na tabela).
 
 ESTRUTURA DO JSON (obrigatória):
 {
-  "title": "título da planilha (ex: Semana - Paulo Henrique - Pace Club)",
-  "plannedVolumeKm": 83,
-  "originalPdfVolume": "~83 km",
+  "title": "título da planilha (ex: PLANO DE TREINAMENTO 7 KM - SEMANA 3 ou Semana - Paulo Henrique)",
+  "athleteName": "nome do atleta se informado (ex: Hugo Henrique Martins)",
+  "startDate": "YYYY-MM-DD (data da segunda-feira extraída da coluna DATA/PERÍODO ou use a data de referência)",
+  "endDate": "YYYY-MM-DD (data do domingo correspondente)",
+  "plannedVolumeKm": 20,
+  "originalPdfVolume": "~ 18 – 22 km",
   "workouts": [
     {
       "dayOfWeek": "SEGUNDA",
       "period": "MANHA",
       "time": "06:30",
-      "category": "ACADEMIA",
-      "name": "20 min aquecimento + Academia + 5 km desaquecimento",
-      "targetDistanceKm": 5,
-      "targetPaceMin": "5:10",
+      "category": "LEVE",
+      "name": "Rodagem leve (ritmo confortável)",
+      "targetDistanceKm": 4.5,
+      "targetPaceMin": "5:20",
       "targetPaceMax": "5:40",
       "repeatCount": 1,
-      "notes": "20 min de aquecimento + ACADEMIA + 5 km de desaquecimento leve"
+      "notes": "RPE: 2-3 | Soltar as pernas e manter a base. Terreno plano. Sem forçar."
     }
   ]
 }
 
 REGRAS OBRIGATÓRIAS:
-- dayOfWeek: SEGUNDA, TERCA, QUARTA, QUINTA, SEXTA, SABADO, DOMINGO
+- dayOfWeek: SEGUNDA, TERCA, QUARTA, QUINTA, SEXTA, SABADO, DOMINGO (mapeie SEG->SEGUNDA, TER->TERCA, QUA->QUARTA, QUI->QUINTA, SEX->SEXTA, SÁB->SABADO, DOM->DOMINGO)
 - period: MANHA, TARDE ou NOITE (use MANHA quando tiver apenas "1 período por dia")
 - category:
-  * LEVE → corrida fácil, regenerativa, ritmo confortável
-  * REGENERATIVO → regenerativo, recuperação fácil
-  * TIROS → tiros, repetições (ex: 10×200m, 15×400m), series
+  * LEVE → corrida fácil, rodagem leve, regenerativa, ritmo confortável
+  * REGENERATIVO → regenerativo, recuperação ativa
+  * TIROS → tiros, repetições (ex: 4×400m, 6×200m, 4×100m, 10×200m), séries
   * FARTLEK → fartlek, variações de ritmo
   * CONTROLADO → ritmo controlado, tempo run
   * LONGAO → longo, longão, 18km+ confortável
   * HALTERES → musculação, halteres
   * ACADEMIA → academia, exercícios de força, cadeira extensora, agachamento, leg press
-  * DESCANSO → descanso, recuperação, rest
+  * DESCANSO → descanso, descanso completo, recuperação, rest
+- Se for descanso completo, category: "DESCANSO" e targetDistanceKm: 0
+- Se o volume for uma faixa (ex: "4,0 - 5,0" ou "6,0 - 7,0"), use a média como targetDistanceKm em número (ex: 4.5, 6.5)
+- Extraia repetições em repeatCount (ex: "4 x 400 m" -> repeatCount: 4; "6 x 200 m" -> repeatCount: 6)
+- Extraia paces no formato "MM:SS" (ex: "5:20", "5:40", "3:55", "4:00")
 
 INTERPRETAÇÃO DE FORMATOS COMUNS:
 - "SEG / SEGUNDA-FEIRA" → dayOfWeek: "SEGUNDA"
@@ -170,7 +178,8 @@ function normalizeAndBuildResult(parsed: any, referenceStartDate: string): Parse
       targetPaceMin: w.targetPaceMin || undefined,
       targetPaceMax: w.targetPaceMax || undefined,
       repeatCount: typeof w.repeatCount === 'number' ? w.repeatCount : 1,
-      notes: w.notes || undefined
+      notes: w.notes || undefined,
+      steps: Array.isArray(w.steps) ? w.steps : undefined
     }));
 
   if (workouts.length === 0) {
@@ -178,7 +187,8 @@ function normalizeAndBuildResult(parsed: any, referenceStartDate: string): Parse
   }
 
   // Calcular data final (7 dias)
-  const endDate = calculateEndDate(referenceStartDate);
+  const effectiveStartDate = parsed.startDate || referenceStartDate;
+  const endDate = parsed.endDate || calculateEndDate(effectiveStartDate);
   const totalKm = typeof parsed.plannedVolumeKm === 'number'
     ? parsed.plannedVolumeKm
     : workouts.reduce((sum, w) => sum + (w.targetDistanceKm || 0), 0);
@@ -187,7 +197,8 @@ function normalizeAndBuildResult(parsed: any, referenceStartDate: string): Parse
 
   return {
     title: parsed.title || 'Planilha Importada via PDF',
-    startDate: referenceStartDate,
+    athleteName: parsed.athleteName,
+    startDate: effectiveStartDate,
     endDate,
     plannedVolumeKm: totalKm,
     originalPdfVolume: parsed.originalPdfVolume || `~${Math.round(totalKm)} km`,

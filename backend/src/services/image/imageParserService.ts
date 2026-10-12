@@ -21,42 +21,46 @@ export async function parseImageContent(
 
   const systemPrompt = `Você é um especialista em interpretar planilhas de treino de corrida.
 Analise a imagem da planilha semanal de treino e extraia TODOS os treinos de cada dia da semana.
+Também identifique o atleta ("Nome: ...") e o período/datas ("05/10 a 11/10" ou datas na coluna DATA).
 
 Retorne SOMENTE um JSON válido com esta estrutura exata (sem markdown, sem código, apenas JSON puro):
 {
-  "title": "título da planilha",
-  "plannedVolumeKm": 90,
-  "originalPdfVolume": "≈ 90 km",
+  "title": "título da planilha (ex: PLANO DE TREINAMENTO 7 KM - SEMANA 3)",
+  "athleteName": "nome do atleta se visível (ex: Hugo Henrique Martins)",
+  "startDate": "YYYY-MM-DD (data da segunda-feira extraída da coluna DATA/PERÍODO ou use a data de referência)",
+  "endDate": "YYYY-MM-DD (data do domingo correspondente)",
+  "plannedVolumeKm": 20,
+  "originalPdfVolume": "~ 18 – 22 km",
   "workouts": [
     {
       "dayOfWeek": "SEGUNDA",
       "period": "MANHA",
       "time": "06:30",
       "category": "LEVE",
-      "name": "10 km Leve",
-      "targetDistanceKm": 10,
-      "targetPaceMin": "4:40",
-      "targetPaceMax": "5:10",
+      "name": "Rodagem leve (ritmo confortável)",
+      "targetDistanceKm": 4.5,
+      "targetPaceMin": "5:20",
+      "targetPaceMax": "5:40",
       "repeatCount": 1,
-      "notes": "observações opcionais"
+      "notes": "RPE: 2-3 | Objetivo: Soltar as pernas e manter a base. Terreno plano. Sem forçar."
     }
   ]
 }
 
 REGRAS OBRIGATÓRIAS:
-- dayOfWeek deve ser exatamente um destes: SEGUNDA, TERCA, QUARTA, QUINTA, SEXTA, SABADO, DOMINGO
+- dayOfWeek deve ser exatamente um destes: SEGUNDA, TERCA, QUARTA, QUINTA, SEXTA, SABADO, DOMINGO (mapeie SEG->SEGUNDA, TER->TERCA, QUA->QUARTA, QUI->QUINTA, SEX->SEXTA, SÁB->SABADO, DOM->DOMINGO)
 - period deve ser: MANHA, TARDE ou NOITE
 - category deve ser: LEVE, REGENERATIVO, TIROS, FARTLEK, CONTROLADO, LONGAO, HALTERES, DESCANSO, ACADEMIA
-- Se o dia é descanso, coloque category: "DESCANSO" e targetDistanceKm: 0
-- Para academia/musculação, use category: "ACADEMIA" ou "HALTERES"
-- Se tiver tiros (ex: 10x200m), use category: "TIROS"
-- Converta TODOS os dias que aparecerem na planilha
-- Se houver SEGUNDA, TERÇA, QUARTA, etc. em português, converta para SEGUNDA, TERCA, QUARTA, etc.
-- Extraia paces no formato "MM:SS" (ex: "4:40", "5:10")
-- plannedVolumeKm deve ser o volume total da semana em número
+- Se o dia for "Descanso completo" ou descanso, coloque category: "DESCANSO" e targetDistanceKm: 0
+- Para academia/musculação/halteres, use category: "ACADEMIA" ou "HALTERES"
+- Se tiver tiros ou repetições (ex: "4 x 400 m", "6 x 200 m", "4 x 100 m", "10x200m"), use category: "TIROS" e repeatCount: número de repetições (ex: 4, 6, 10)
+- Faixa de volume (ex: "4,0 - 5,0" ou "6,0 - 7,0"): use o valor médio como targetDistanceKm em número (ex: 4.5, 6.5)
+- Extraia paces no formato "MM:SS" (ex: "5:20", "5:40", "3:55", "4:00")
+- Em notes, junte o RPE, Objetivo e Observações descritos na linha
+- plannedVolumeKm deve ser o volume total estimado da semana em número
 `;
 
-  const userMessage = `Analise esta planilha semanal de treino e retorne o JSON estruturado conforme instruído. Data de início da semana: ${referenceStartDate}`;
+  const userMessage = `Analise esta planilha semanal de treino e retorne o JSON estruturado conforme instruído. Data de início da semana sugerida: ${referenceStartDate}`;
 
   const requestBody = {
     model,
@@ -155,7 +159,8 @@ REGRAS OBRIGATÓRIAS:
       targetPaceMin: w.targetPaceMin || undefined,
       targetPaceMax: w.targetPaceMax || undefined,
       repeatCount: typeof w.repeatCount === 'number' ? w.repeatCount : 1,
-      notes: w.notes || undefined
+      notes: w.notes || undefined,
+      steps: Array.isArray(w.steps) ? w.steps : undefined
     }));
 
   if (workouts.length === 0) {
@@ -163,14 +168,16 @@ REGRAS OBRIGATÓRIAS:
   }
 
   // Calcular datas de início e fim da semana
-  const endDate = calculateEndDate(referenceStartDate);
+  const effectiveStartDate = parsed.startDate || referenceStartDate;
+  const endDate = parsed.endDate || calculateEndDate(effectiveStartDate);
   const totalKm = parsed.plannedVolumeKm || workouts.reduce((sum, w) => sum + (w.targetDistanceKm || 0), 0);
 
   console.log(`[IMAGE PARSER] ${workouts.length} treinos extraídos com sucesso via OpenAI Vision.`);
 
   return {
     title: parsed.title || 'Planilha Importada via Imagem',
-    startDate: referenceStartDate,
+    athleteName: parsed.athleteName,
+    startDate: effectiveStartDate,
     endDate,
     plannedVolumeKm: totalKm,
     originalPdfVolume: parsed.originalPdfVolume || `≈ ${Math.round(totalKm)} km`,
