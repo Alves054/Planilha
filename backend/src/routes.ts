@@ -17,6 +17,8 @@ import {
   deleteCycle,
   duplicateCycle,
   applyCycleToAthlete,
+  removeCycleFromAthlete,
+  getAthleteCycleWorkouts,
   saveWeekAsCycle
 } from './controllers/cycleController.js';
 
@@ -38,6 +40,8 @@ routes.post('/athletes', createAthlete);
 routes.put('/athletes/:id', updateAthlete);
 routes.put('/athletes/:id/pace-zones', updatePaceZones);
 routes.delete('/athletes/:id', deleteAthlete);
+routes.post('/athletes/:id/remove-cycle', removeCycleFromAthlete);
+routes.get('/athletes/:id/cycle-workouts', getAthleteCycleWorkouts);
 
 // Ciclos e Planejamento de Treino (Periodização / 30 Dias / 5km Sub 16)
 routes.get('/cycles', listCycles);
@@ -47,6 +51,7 @@ routes.put('/cycles/:id', updateCycle);
 routes.delete('/cycles/:id', deleteCycle);
 routes.post('/cycles/:id/duplicate', duplicateCycle);
 routes.post('/cycles/:id/apply', applyCycleToAthlete);
+routes.post('/cycles/remove-from-athlete', removeCycleFromAthlete);
 routes.post('/cycles/save-from-week', saveWeekAsCycle);
 
 // Semanas

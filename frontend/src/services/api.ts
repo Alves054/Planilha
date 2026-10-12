@@ -315,3 +315,13 @@ export const saveWeekAsCycleApi = async (payload: {
   return res.data;
 };
 
+export const removeCycleFromAthleteApi = async (athleteId: string, cycleName?: string, cycleId?: string) => {
+  const res = await api.post(`/athletes/${athleteId}/remove-cycle`, { athleteId, cycleName, cycleId });
+  return res.data;
+};
+
+export const getAthleteCycleWorkoutsApi = async (athleteId: string) => {
+  const res = await api.get(`/athletes/${athleteId}/cycle-workouts`);
+  return res.data;
+};
+

@@ -9,6 +9,7 @@ import { LoginModal } from './components/auth/LoginModal';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { WorkoutResultModal } from './components/workout/WorkoutResultModal';
 import { PaceZonesModal } from './components/admin/PaceZonesModal';
+import { CycleViewerModal } from './components/admin/CycleViewerModal';
 import { LoginPage } from './pages/LoginPage';
 import { PaceAI } from './pages/PaceAI';
 import {
@@ -26,7 +27,7 @@ import {
   createWeek,
   getMeApi
 } from './services/api';
-import { Activity, Info, Users, User, ArrowLeft, Plus, Edit2 } from 'lucide-react';
+import { Activity, Info, Users, User, ArrowLeft, Plus, Edit2, BookOpen, Flame } from 'lucide-react';
 
 export function App() {
   const [currentView, setCurrentView] = useState<'CALENDAR' | 'PACE_AI'>('CALENDAR');
@@ -50,6 +51,7 @@ export function App() {
   const [isResultModalOpen, setIsResultModalOpen] = useState<boolean>(false);
   const [resultWorkout, setResultWorkout] = useState<Workout | null>(null);
   const [isPaceZonesModalOpen, setIsPaceZonesModalOpen] = useState<boolean>(false);
+  const [isCycleViewerOpen, setIsCycleViewerOpen] = useState<boolean>(false);
 
   // Carregar usuário logado do localStorage no início
   useEffect(() => {
@@ -289,7 +291,7 @@ export function App() {
           />
 
           {/* Calendar Section Header */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
                 <span>Grade Semanal de Treinos</span>
@@ -304,15 +306,27 @@ export function App() {
               </p>
             </div>
 
-            {currentUser?.role === 'COACH' && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => handleOpenAddWorkout()}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600/30 text-blue-400 text-xs font-semibold transition-colors cursor-pointer"
+                type="button"
+                onClick={() => setIsCycleViewerOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-red-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                title="Ver todos os treinos do ciclo"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Adicionar Treino</span>
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                <span>🎯 Ver Ciclo Completo</span>
               </button>
-            )}
+
+              {currentUser?.role === 'COACH' && (
+                <button
+                  onClick={() => handleOpenAddWorkout()}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600/30 text-blue-400 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Adicionar Treino</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Weekly Calendar Component */}
@@ -455,6 +469,30 @@ export function App() {
         }}
       />
 
+      {/* Visualizador de Todos os Treinos do Ciclo do Aluno */}
+      <CycleViewerModal
+        isOpen={isCycleViewerOpen}
+        onClose={() => setIsCycleViewerOpen(false)}
+        athlete={
+          selectedAthlete ||
+          (currentUser ? {
+            id: currentUser.id,
+            name: currentUser.name,
+            email: currentUser.email,
+            paceLeve: currentUser.paceLeve,
+            paceModerado: currentUser.paceModerado,
+            paceControlado: currentUser.paceControlado,
+            paceTiros: currentUser.paceTiros
+          } : null)
+        }
+        onCycleRemoved={() => {
+          loadData();
+        }}
+        onOpenApply={() => {
+          setIsAdminPanelOpen(true);
+        }}
+      />
+
     </div>
   );
-}
+};

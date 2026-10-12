@@ -1268,3 +1268,135 @@ export async function saveWeekAsCycle(req: Request, res: Response) {
     return res.status(500).json({ error: 'Erro ao salvar semana como ciclo.' });
   }
 }
+
+/**
+ * Remove todas as semanas de um ciclo de treino atribuído a um aluno
+ */
+export async function removeCycleFromAthlete(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const athleteId = req.body.athleteId || id;
+    const { cycleName, cycleId } = req.body;
+
+    if (!athleteId) {
+      return res.status(400).json({ error: 'ID do aluno é obrigatório.' });
+    }
+
+    const athlete = await prisma.user.findUnique({ where: { id: athleteId } });
+    if (!athlete) {
+      return res.status(404).json({ error: 'Aluno não encontrado.' });
+    }
+
+    let targetCycleName = cycleName;
+    if (!targetCycleName && cycleId) {
+      const cycleModel = (prisma as any).trainingCycle;
+      if (cycleModel) {
+        const c = await cycleModel.findUnique({ where: { id: cycleId } });
+        if (c) targetCycleName = c.name;
+      }
+    }
+
+    let whereClause: any = { userId: athleteId };
+    if (targetCycleName) {
+      const cleanName = targetCycleName.split('(')[0].trim();
+      whereClause.OR = [
+        { title: { contains: targetCycleName } },
+        { title: { contains: cleanName } }
+      ];
+    }
+
+    const weeksToDelete = await prisma.week.findMany({
+      where: whereClause,
+      select: { id: true, title: true }
+    });
+
+    if (weeksToDelete.length === 0) {
+      return res.status(404).json({ error: 'Nenhuma semana de ciclo encontrada para remover deste aluno.' });
+    }
+
+    const weekIds = weeksToDelete.map(w => w.id);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.workout.deleteMany({
+        where: { trainingDay: { weekId: { in: weekIds } } }
+      });
+      await tx.trainingDay.deleteMany({
+        where: { weekId: { in: weekIds } }
+      });
+      await tx.week.deleteMany({
+        where: { id: { in: weekIds } }
+      });
+    });
+
+    console.log(`[CYCLE REMOVE] Removidas ${weeksToDelete.length} semanas de ${athlete.name}.`);
+
+    return res.json({
+      success: true,
+      message: `${weeksToDelete.length} semana(s) do ciclo foram removidas da planilha de ${athlete.name} com sucesso!`,
+      deletedWeeksCount: weeksToDelete.length
+    });
+  } catch (err: any) {
+    console.error('Erro ao remover ciclo do aluno:', err);
+    return res.status(500).json({ error: 'Erro ao remover ciclo do aluno.' });
+  }
+}
+
+/**
+ * Retorna todos os treinos de todas as semanas do ciclo de um aluno
+ */
+export async function getAthleteCycleWorkouts(req: Request, res: Response) {
+  try {
+    const athleteId = req.params.id as string;
+    const athlete = await prisma.user.findUnique({
+      where: { id: athleteId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        paceLeve: true,
+        paceModerado: true,
+        paceControlado: true,
+        paceTiros: true
+      }
+    });
+
+    if (!athlete) {
+      return res.status(404).json({ error: 'Aluno não encontrado.' });
+    }
+
+    const weeks: any[] = await (prisma.week as any).findMany({
+      where: { userId: athleteId },
+      orderBy: { startDate: 'asc' },
+      include: {
+        trainingDays: {
+          orderBy: { date: 'asc' },
+          include: {
+            workouts: {
+              include: {
+                steps: {
+                  orderBy: { stepOrder: 'asc' }
+                }
+              },
+              orderBy: { time: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    const totalWorkouts = weeks.reduce((acc: number, w: any) => acc + (w.trainingDays?.reduce((dAcc: number, d: any) => dAcc + (d.workouts?.length || 0), 0) || 0), 0);
+    const totalKm = weeks.reduce((acc: number, w: any) => acc + (w.trainingDays?.reduce((dAcc: number, d: any) => dAcc + (d.workouts?.reduce((woAcc: number, wo: any) => woAcc + (wo.targetDistanceKm || 0), 0) || 0), 0) || 0), 0);
+
+    return res.json({
+      athlete,
+      weeks,
+      totalWeeks: weeks.length,
+      totalWorkouts,
+      totalKm: Math.round(totalKm * 10) / 10
+    });
+  } catch (err: any) {
+    console.error('Erro ao buscar treinos do ciclo do aluno:', err);
+    return res.status(500).json({ error: 'Erro ao buscar treinos do ciclo do aluno.' });
+  }
+}

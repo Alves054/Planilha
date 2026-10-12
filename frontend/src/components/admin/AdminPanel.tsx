@@ -21,6 +21,7 @@ import {
 } from '../../services/api';
 import { ApplyCycleModal } from './ApplyCycleModal';
 import { CycleBuilderModal } from './CycleBuilderModal';
+import { CycleViewerModal } from './CycleViewerModal';
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -53,6 +54,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [applyAthleteId, setApplyAthleteId] = useState<string | undefined>(undefined);
   const [isCycleBuilderOpen, setIsCycleBuilderOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<TrainingCycleItem | null>(null);
+
+  // Modal de Visualização de Todos os Treinos do Ciclo
+  const [isViewerModalOpen, setIsViewerModalOpen] = useState(false);
+  const [viewerCycle, setViewerCycle] = useState<TrainingCycleItem | null>(null);
+  const [viewerAthlete, setViewerAthlete] = useState<AthleteItem | null>(null);
+
+  const handleOpenCycleViewer = (c?: TrainingCycleItem | null, a?: AthleteItem | null) => {
+    setViewerCycle(c || null);
+    setViewerAthlete(a || null);
+    setIsViewerModalOpen(true);
+  };
 
   // Modal de Criar/Editar Aluno
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -590,7 +602,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             className="w-full py-2 px-3.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-red-500/15 hover:from-amber-500/25 hover:to-orange-500/25 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                           >
                             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                            <span>⚡ Aplicar Ciclo de Treino (30d)</span>
+                            <span>⚡ Aplicar Ciclo de Treino</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleOpenCycleViewer(null, athlete)}
+                            className="w-full py-2 px-3.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>🎯 Ver Ciclo / Remover do Aluno</span>
                           </button>
 
                           <button
@@ -770,6 +790,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           >
                             <Sparkles className="w-3.5 h-3.5 text-black" />
                             <span>⚡ Aplicar em Aluno (1-Clique)</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleOpenCycleViewer(cycle, null)}
+                            className="w-full py-2 px-3.5 rounded-xl bg-zinc-850 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/60 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>👁️ Ver Todos os Treinos ({parsedWeeks.length} Semanas)</span>
                           </button>
 
                           <div className="grid grid-cols-3 gap-1.5">
@@ -1223,6 +1251,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         onClose={() => setIsCycleBuilderOpen(false)}
         cycleToEdit={editingCycle}
         onSuccess={handleCycleActionSuccess}
+      />
+
+      {/* MODAL DE VISUALIZAÇÃO COMPLETA E REMOÇÃO DO CICLO */}
+      <CycleViewerModal
+        isOpen={isViewerModalOpen}
+        onClose={() => setIsViewerModalOpen(false)}
+        cycle={viewerCycle}
+        athlete={viewerAthlete}
+        onCycleRemoved={handleCycleActionSuccess}
+        onOpenApply={(cId, aId) => handleOpenApplyCycle(cId, aId)}
       />
     </div>
   );
