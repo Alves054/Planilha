@@ -33,14 +33,23 @@ export const ApplyCycleModal: React.FC<ApplyCycleModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   React.useEffect(() => {
-    if (initialCycleId) setSelectedCycleId(initialCycleId);
-    if (initialAthleteId) setSelectedAthleteId(initialAthleteId);
-  }, [initialCycleId, initialAthleteId, isOpen]);
+    if (initialCycleId) {
+      setSelectedCycleId(initialCycleId);
+    } else if (cycles.length > 0 && (!selectedCycleId || !cycles.some(c => c.id === selectedCycleId))) {
+      setSelectedCycleId(cycles[0].id);
+    }
+
+    if (initialAthleteId) {
+      setSelectedAthleteId(initialAthleteId);
+    } else if (athletes.length > 0 && (!selectedAthleteId || !athletes.some(a => a.id === selectedAthleteId))) {
+      setSelectedAthleteId(athletes[0].id);
+    }
+  }, [initialCycleId, initialAthleteId, isOpen, cycles, athletes]);
 
   if (!isOpen) return null;
 
-  const currentCycle = cycles.find(c => c.id === selectedCycleId) || cycles[0];
-  const currentAthlete = athletes.find(a => a.id === selectedAthleteId) || athletes[0];
+  const currentCycle = cycles.find(c => c.id === selectedCycleId) || (initialCycleId ? cycles.find(c => c.id === initialCycleId) : null) || cycles[0];
+  const currentAthlete = athletes.find(a => a.id === selectedAthleteId) || (initialAthleteId ? athletes.find(a => a.id === initialAthleteId) : null) || athletes[0];
 
   let weeksList: CycleWeek[] = [];
   try {
@@ -62,7 +71,10 @@ export const ApplyCycleModal: React.FC<ApplyCycleModalProps> = ({
   }, 0);
 
   const handleApply = async () => {
-    if (!selectedCycleId || !selectedAthleteId) {
+    const cycleId = selectedCycleId || currentCycle?.id || initialCycleId || cycles[0]?.id;
+    const athleteId = selectedAthleteId || currentAthlete?.id || initialAthleteId || athletes[0]?.id;
+
+    if (!cycleId || !athleteId) {
       setError('Selecione o ciclo e o aluno para continuar.');
       return;
     }
@@ -70,8 +82,9 @@ export const ApplyCycleModal: React.FC<ApplyCycleModalProps> = ({
     try {
       setApplying(true);
       setError(null);
-      const res = await applyCycleToAthleteApi(selectedCycleId, selectedAthleteId, startDate);
-      onSuccess(res.message || `Ciclo aplicado com sucesso para ${currentAthlete?.name}!`);
+      const res = await applyCycleToAthleteApi(cycleId, athleteId, startDate);
+      const targetAthleteName = athletes.find(a => a.id === athleteId)?.name || currentAthlete?.name || 'o aluno';
+      onSuccess(res.message || `Ciclo aplicado com sucesso para ${targetAthleteName}!`);
       onClose();
     } catch (err: any) {
       console.error(err);
@@ -128,8 +141,11 @@ export const ApplyCycleModal: React.FC<ApplyCycleModalProps> = ({
               1. Escolha o Ciclo / Modelo de Planejamento:
             </label>
             <select
-              value={selectedCycleId}
-              onChange={(e) => setSelectedCycleId(e.target.value)}
+              value={selectedCycleId || currentCycle?.id || ''}
+              onChange={(e) => {
+                setSelectedCycleId(e.target.value);
+                setError(null);
+              }}
               className="w-full px-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-700/80 text-white font-bold text-sm focus:outline-none focus:border-amber-500 transition-colors cursor-pointer"
             >
               {cycles.map(c => (
@@ -183,8 +199,11 @@ export const ApplyCycleModal: React.FC<ApplyCycleModalProps> = ({
             </label>
             <div className="relative">
               <select
-                value={selectedAthleteId}
-                onChange={(e) => setSelectedAthleteId(e.target.value)}
+                value={selectedAthleteId || currentAthlete?.id || ''}
+                onChange={(e) => {
+                  setSelectedAthleteId(e.target.value);
+                  setError(null);
+                }}
                 className="w-full px-4 py-3 pl-10 rounded-2xl bg-zinc-900 border border-zinc-700/80 text-white font-bold text-sm focus:outline-none focus:border-amber-500 transition-colors cursor-pointer"
               >
                 {athletes.map(a => (

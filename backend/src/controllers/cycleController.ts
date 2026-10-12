@@ -1080,8 +1080,8 @@ export async function applyCycleToAthlete(req: Request, res: Response) {
 
       // Cria a semana para o aluno
       const weekTitle = cycleWeek.title
-        ? `${cycle.name} - ${cycleWeek.title}`
-        : `${cycle.name} (Semana ${wIdx + 1})`;
+        ? `${cycle.name} - ${cycleWeek.title} (${athlete.name})`
+        : `${cycle.name} (Semana ${wIdx + 1}) - ${athlete.name}`;
 
       const createdWeek = await prisma.week.create({
         data: {
