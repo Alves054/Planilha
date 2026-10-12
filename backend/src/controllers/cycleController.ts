@@ -2,9 +2,11 @@ import { Request, Response } from 'express';
 import { prisma } from '../prisma.js';
 import { getCurrentWeekMonday, getWeekSunday, getWeekDaysConfig } from '../utils/dateUtils.js';
 import { calculateWorkoutEstimatedDistance } from '../engine/workoutEngine.js';
+import { HUGO_12_WEEKS_CYCLE } from '../data/hugo12WeeksCycle.js';
 
 // Modelos padrão pré-carregados (Seeds) para o treinador
 const DEFAULT_CYCLES = [
+  HUGO_12_WEEKS_CYCLE,
   {
     name: 'Ciclo 5km Sub 16min (30 Dias / 4 Semanas)',
     category: '5KM',
@@ -799,9 +801,11 @@ async function ensureDefaultCyclesSeeded() {
     const cycleModel = (prisma as any).trainingCycle;
     if (!cycleModel) return;
 
-    const count = await cycleModel.count();
-    if (count === 0) {
-      for (const item of DEFAULT_CYCLES) {
+    for (const item of DEFAULT_CYCLES) {
+      const existing = await cycleModel.findFirst({
+        where: { name: item.name }
+      });
+      if (!existing) {
         await cycleModel.create({
           data: {
             name: item.name,
@@ -812,6 +816,7 @@ async function ensureDefaultCyclesSeeded() {
             weeksData: JSON.stringify(item.weeks)
           }
         });
+        console.log(`✅ Ciclo padrão semeado com sucesso: ${item.name}`);
       }
     }
   } catch (e) {
