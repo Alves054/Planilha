@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma.js';
 import { calculateWeekMetrics } from '../engine/workoutEngine.js';
-import { getCurrentWeekMonday, getWeekSunday, getWeekDaysConfig } from '../utils/dateUtils.js';
+import { getBrasiliaDateString, getCurrentWeekMonday, getWeekSunday, getWeekDaysConfig } from '../utils/dateUtils.js';
 
 function getUserSelectFields(): any {
   const select: any = {
@@ -52,8 +52,18 @@ export async function getCurrentWeek(req: Request, res: Response) {
       return res.status(404).json({ error: 'Nenhum atleta selecionado.' });
     }
 
+    const todayStr = getBrasiliaDateString();
+    const currentMonday = getCurrentWeekMonday();
+
+    // Prioriza encontrar a semana cuja vigência cobre a data de hoje ou a segunda-feira atual
     let week = await prisma.week.findFirst({
-      where: { userId: targetUserId },
+      where: {
+        userId: targetUserId,
+        OR: [
+          { startDate: { lte: todayStr }, endDate: { gte: todayStr } },
+          { startDate: currentMonday }
+        ]
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
@@ -73,6 +83,30 @@ export async function getCurrentWeek(req: Request, res: Response) {
         }
       }
     });
+
+    if (!week) {
+      week = await prisma.week.findFirst({
+        where: { userId: targetUserId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: getUserSelectFields()
+          },
+          trainingDays: {
+            orderBy: { date: 'asc' },
+            include: {
+              workouts: {
+                include: {
+                  steps: {
+                    orderBy: { stepOrder: 'asc' }
+                  }
+                },
+              }
+            }
+          }
+        }
+      });
+    }
 
     if (week) {
       const totalWorkouts = week.trainingDays.reduce((acc, d) => acc + d.workouts.length, 0);
