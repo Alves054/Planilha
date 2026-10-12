@@ -11,6 +11,7 @@ import { WorkoutResultModal } from './components/workout/WorkoutResultModal';
 import { PaceZonesModal } from './components/admin/PaceZonesModal';
 import { CycleViewerModal } from './components/admin/CycleViewerModal';
 import { LoginPage } from './pages/LoginPage';
+import { LandingPage } from './pages/LandingPage';
 import { PaceAI } from './pages/PaceAI';
 import {
   Week, WeekMetrics, Workout, TrainingDay,
@@ -40,7 +41,7 @@ export function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modals state
+  const [unauthView, setUnauthView] = useState<'LANDING' | 'LOGIN'>('LANDING');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState<boolean>(false);
   const [isWorkoutModalOpen, setIsWorkoutModalOpen] = useState<boolean>(false);
@@ -203,9 +204,17 @@ export function App() {
     loadData(athlete.id);
   };
 
-  // Se não estiver logado, exibe a Página de Login como tela principal do site
+  // Se não estiver logado, exibe Landing Page ou Login Page
   if (!currentUser) {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+    if (unauthView === 'LOGIN') {
+      return (
+        <LoginPage 
+          onLoginSuccess={handleLoginSuccess} 
+          onBackToHome={() => setUnauthView('LANDING')} 
+        />
+      );
+    }
+    return <LandingPage onGoToLogin={() => setUnauthView('LOGIN')} />;
   }
 
   if (loading && !week) {
