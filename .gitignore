@@ -21,6 +21,7 @@ dist/
 
 # Logs e arquivos de sistema
 *.log
+*.zip
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

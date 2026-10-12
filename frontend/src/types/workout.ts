@@ -16,6 +16,7 @@ export type WorkoutCategory =
   | 'CONTROLADO'
   | 'LONGAO'
   | 'HALTERES'
+  | 'ACADEMIA'
   | 'DESCANSO';
 
 export interface WorkoutStep {
@@ -45,6 +46,15 @@ export interface Workout {
   targetHeartRateZone?: string | null;
   repeatCount: number;
   notes?: string | null;
+  // Resultados da Execução do Aluno
+  actualDistanceKm?: number | null;
+  actualPace?: string | null;
+  actualDurationMinutes?: number | null;
+  actualHeartRate?: number | null;
+  feedback?: string | null;
+  proofImageUrl?: string | null;
+  completedAt?: string | null;
+  isCompleted?: boolean;
   syncStatus: SyncStatus;
   garminWorkoutId?: string | null;
   syncHash?: string | null;
@@ -53,6 +63,37 @@ export interface Workout {
   steps: WorkoutStep[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface WorkoutResultItem {
+  id: string;
+  name: string;
+  sport: string;
+  category: WorkoutCategory;
+  time?: string | null;
+  period: WorkoutPeriod;
+  targetDistanceKm?: number | null;
+  estimatedDistanceKm?: number | null;
+  targetPaceMin?: string | null;
+  targetPaceMax?: string | null;
+  actualDistanceKm?: number | null;
+  actualPace?: string | null;
+  actualDurationMinutes?: number | null;
+  actualHeartRate?: number | null;
+  feedback?: string | null;
+  proofImageUrl?: string | null;
+  isCompleted: boolean;
+  completedAt?: string | null;
+  updatedAt?: string;
+  date: string;
+  dayOfWeek: string;
+  weekTitle?: string | null;
+  athlete: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+  };
 }
 
 export interface TrainingDay {
@@ -82,8 +123,26 @@ export interface WeekMetrics {
   }>;
 }
 
+export interface PaceZones {
+  paceLeve?: string;
+  paceModerado?: string;
+  paceControlado?: string;
+  paceTiros?: string;
+}
+
 export interface Week {
   id: string;
+  userId?: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    paceLeve?: string;
+    paceModerado?: string;
+    paceControlado?: string;
+    paceTiros?: string;
+  };
   title?: string;
   startDate: string;
   endDate: string;
@@ -134,4 +193,39 @@ export interface AIConversationItem {
   messages?: AIMessageItem[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'COACH' | 'ATHLETE';
+  phone?: string | null;
+  notes?: string | null;
+  paceLeve?: string;
+  paceModerado?: string;
+  paceControlado?: string;
+  paceTiros?: string;
+  coachId?: string | null;
+}
+
+export interface AthleteItem {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  notes?: string | null;
+  paceLeve?: string;
+  paceModerado?: string;
+  paceControlado?: string;
+  paceTiros?: string;
+  createdAt: string;
+  latestWeek?: {
+    id: string;
+    title: string;
+    plannedVolumeKm: number;
+    startDate: string;
+    endDate: string;
+    status: string;
+  } | null;
 }

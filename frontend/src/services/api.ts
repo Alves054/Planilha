@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Week, WeekMetrics, Workout, GarminConnectionStatus, SyncLogItem, AIConversationItem, AIMessageItem } from '../types/workout';
+import { Week, WeekMetrics, Workout, GarminConnectionStatus, SyncLogItem, AIConversationItem, AIMessageItem, UserProfile, AthleteItem } from '../types/workout';
 
 // URL base dinâmica (Em produção Vercel usa '/api', em Dev usa 'http://localhost:3001/api')
 const getApiBaseUrl = () => {
@@ -13,17 +13,96 @@ const api = axios.create({
   baseURL: getApiBaseUrl()
 });
 
-export const getCurrentWeek = async (): Promise<{ week: Week; metrics: WeekMetrics }> => {
-  const res = await api.get<{ week: Week; metrics: WeekMetrics }>('/weeks/current');
+// Interceptor para injetar JWT Token nas requisições
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('pace_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// ─── Autenticação & Alunos ──────────────────────────────────────────────────
+export const loginApi = async (email: string, password: string): Promise<{ success: boolean; token: string; user: UserProfile }> => {
+  const res = await api.post('/auth/login', { email, password });
   return res.data;
 };
 
-export const listWeeks = async (): Promise<Week[]> => {
-  const res = await api.get<Week[]>('/weeks');
+export const getMeApi = async (): Promise<{ user: UserProfile }> => {
+  const res = await api.get('/auth/me');
   return res.data;
 };
 
-export const createWeek = async (data: { title?: string; startDate: string; endDate: string; plannedVolumeKm?: number; originalPdfVolume?: string }) => {
+export const listAthletesApi = async (): Promise<{ athletes: AthleteItem[] }> => {
+  const res = await api.get('/athletes');
+  return res.data;
+};
+
+export const createAthleteApi = async (data: {
+  name: string;
+  email: string;
+  password?: string;
+  phone?: string;
+  notes?: string;
+  paceLeve?: string;
+  paceModerado?: string;
+  paceControlado?: string;
+  paceTiros?: string;
+}): Promise<{ success: boolean; athlete: AthleteItem }> => {
+  const res = await api.post('/athletes', data);
+  return res.data;
+};
+
+export const updateAthleteApi = async (
+  id: string,
+  data: Partial<{
+    name: string;
+    email: string;
+    password?: string;
+    phone?: string;
+    notes?: string;
+    paceLeve?: string;
+    paceModerado?: string;
+    paceControlado?: string;
+    paceTiros?: string;
+  }>
+): Promise<{ success: boolean; athlete: AthleteItem }> => {
+  const res = await api.put(`/athletes/${id}`, data);
+  return res.data;
+};
+
+export const updatePaceZonesApi = async (
+  athleteId: string,
+  zones: {
+    paceLeve?: string;
+    paceModerado?: string;
+    paceControlado?: string;
+    paceTiros?: string;
+  }
+): Promise<{ success: boolean; athlete: any; message: string }> => {
+  const res = await api.put(`/athletes/${athleteId}/pace-zones`, zones);
+  return res.data;
+};
+
+export const deleteAthleteApi = async (id: string): Promise<{ success: boolean }> => {
+  const res = await api.delete(`/athletes/${id}`);
+  return res.data;
+};
+
+// ─── Semanas & Treinos ─────────────────────────────────────────────────────
+export const getCurrentWeek = async (athleteId?: string): Promise<{ week: Week; metrics: WeekMetrics }> => {
+  const params = athleteId ? { athleteId } : {};
+  const res = await api.get<{ week: Week; metrics: WeekMetrics }>('/weeks/current', { params });
+  return res.data;
+};
+
+export const listWeeks = async (athleteId?: string): Promise<Week[]> => {
+  const params = athleteId ? { athleteId } : {};
+  const res = await api.get<Week[]>('/weeks', { params });
+  return res.data;
+};
+
+export const createWeek = async (data: { title?: string; startDate: string; endDate: string; plannedVolumeKm?: number; originalPdfVolume?: string; athleteId?: string }) => {
   const res = await api.post<Week>('/weeks', data);
   return res.data;
 };
@@ -48,7 +127,7 @@ export const duplicateWorkout = async (id: string, targetTrainingDayId?: string)
   return res.data;
 };
 
-export const importPdfApi = async (file?: File | null, startDate?: string): Promise<{ success: boolean; weekId: string; totalParsed: number; totalPersisted: number; message: string }> => {
+export const importPdfApi = async (file?: File | null, startDate?: string, athleteId?: string): Promise<{ success: boolean; weekId: string; totalParsed: number; totalPersisted: number; message: string }> => {
   const formData = new FormData();
   if (file) {
     formData.append('pdf', file);
@@ -56,7 +135,27 @@ export const importPdfApi = async (file?: File | null, startDate?: string): Prom
   if (startDate) {
     formData.append('startDate', startDate);
   }
+  if (athleteId) {
+    formData.append('athleteId', athleteId);
+  }
   const res = await api.post('/pdf/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  return res.data;
+};
+
+export const importImageApi = async (file: File, startDate?: string, athleteId?: string): Promise<{ success: boolean; weekId: string; totalParsed: number; totalPersisted: number; message: string; source?: string }> => {
+  const formData = new FormData();
+  formData.append('image', file);
+  if (startDate) {
+    formData.append('startDate', startDate);
+  }
+  if (athleteId) {
+    formData.append('athleteId', athleteId);
+  }
+  const res = await api.post('/image/import', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
@@ -122,5 +221,33 @@ export const syncWeekWorkouts = async (weekId: string) => {
 
 export const getSyncLogs = async (): Promise<SyncLogItem[]> => {
   const res = await api.get<SyncLogItem[]>('/garmin/logs');
+  return res.data;
+};
+
+// ==========================================
+// Resultados de Treinos (Manual / Comprovantes)
+// ==========================================
+export const getWorkoutResultsApi = async (athleteId?: string): Promise<{ results: import('../types/workout').WorkoutResultItem[] }> => {
+  const params = athleteId ? { athleteId } : {};
+  const res = await api.get('/workout-results', { params });
+  return res.data;
+};
+
+export const submitWorkoutResultApi = async (workoutId: string, payload: FormData | {
+  actualDistanceKm?: number;
+  actualPace?: string;
+  actualDurationMinutes?: number;
+  actualHeartRate?: number;
+  feedback?: string;
+  proofImageUrl?: string;
+  isCompleted?: boolean;
+}) => {
+  const headers = payload instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {};
+  const res = await api.post(`/workouts/${workoutId}/result`, payload, { headers });
+  return res.data;
+};
+
+export const resetWorkoutResultApi = async (workoutId: string) => {
+  const res = await api.delete(`/workouts/${workoutId}/result`);
   return res.data;
 };

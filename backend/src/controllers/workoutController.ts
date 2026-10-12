@@ -220,3 +220,193 @@ export async function duplicateWorkout(req: Request, res: Response) {
     return res.status(500).json({ error: 'Erro interno ao duplicar treino.' });
   }
 }
+
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * Salva resultado de treino (manual e/ou com comprovante de imagem)
+ */
+export async function submitWorkoutResult(req: Request, res: Response) {
+  try {
+    const workoutId = String(req.params.id);
+    const {
+      actualDistanceKm,
+      actualPace,
+      actualDurationMinutes,
+      actualHeartRate,
+      feedback,
+      proofImageUrl: bodyProofUrl,
+      isCompleted
+    } = req.body;
+
+    const existing = await prisma.workout.findUnique({
+      where: { id: workoutId },
+      include: { trainingDay: { include: { week: { include: { user: true } } } } }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Treino não encontrado.' });
+    }
+
+    let finalProofUrl = bodyProofUrl || existing.proofImageUrl || null;
+
+    // Se houve upload de arquivo
+    const file = (req as any).file || ((req as any).files && (req as any).files[0]);
+    if (file && file.buffer) {
+      const ext = path.extname(file.originalname) || '.jpg';
+      const filename = `proof_${workoutId}_${Date.now()}${ext}`;
+      const uploadDir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      const fullPath = path.join(uploadDir, filename);
+      fs.writeFileSync(fullPath, file.buffer);
+      finalProofUrl = `/uploads/${filename}`;
+    }
+
+    const updated = await prisma.workout.update({
+      where: { id: workoutId },
+      data: {
+        actualDistanceKm: actualDistanceKm !== undefined ? (actualDistanceKm ? parseFloat(actualDistanceKm) : null) : existing.actualDistanceKm,
+        actualPace: actualPace !== undefined ? (actualPace ? String(actualPace) : null) : existing.actualPace,
+        actualDurationMinutes: actualDurationMinutes !== undefined ? (actualDurationMinutes ? parseFloat(actualDurationMinutes) : null) : existing.actualDurationMinutes,
+        actualHeartRate: actualHeartRate !== undefined ? (actualHeartRate ? parseInt(actualHeartRate, 10) : null) : existing.actualHeartRate,
+        feedback: feedback !== undefined ? (feedback ? String(feedback) : null) : existing.feedback,
+        proofImageUrl: finalProofUrl,
+        isCompleted: isCompleted !== undefined ? (isCompleted === 'true' || isCompleted === true) : true,
+        completedAt: new Date()
+      },
+      include: {
+        steps: { orderBy: { stepOrder: 'asc' } },
+        trainingDay: {
+          include: {
+            week: {
+              include: { user: true }
+            }
+          }
+        }
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Resultado do treino registrado com sucesso!',
+      workout: updated
+    });
+  } catch (error) {
+    console.error('[SUBMIT WORKOUT RESULT] Erro:', error);
+    return res.status(500).json({ error: 'Erro ao registrar resultado do treino.' });
+  }
+}
+
+/**
+ * Lista resultados de treinos para o Painel do Treinador
+ */
+export async function getWorkoutResults(req: Request, res: Response) {
+  try {
+    const { athleteId, limit } = req.query;
+
+    const whereClause: any = {
+      OR: [
+        { isCompleted: true },
+        { actualDistanceKm: { not: null } },
+        { proofImageUrl: { not: null } }
+      ]
+    };
+
+    if (athleteId) {
+      whereClause.trainingDay = {
+        week: {
+          userId: String(athleteId)
+        }
+      };
+    }
+
+    const workouts = await prisma.workout.findMany({
+      where: whereClause,
+      include: {
+        trainingDay: {
+          include: {
+            week: {
+              include: {
+                user: {
+                  select: { id: true, name: true, email: true, phone: true }
+                }
+              }
+            }
+          }
+        }
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit ? parseInt(String(limit), 10) : 50
+    });
+
+    const formatted = workouts.map(w => ({
+      id: w.id,
+      name: w.name,
+      sport: w.sport,
+      category: w.category,
+      time: w.time,
+      period: w.period,
+      targetDistanceKm: w.targetDistanceKm,
+      estimatedDistanceKm: w.estimatedDistanceKm,
+      targetPaceMin: w.targetPaceMin,
+      targetPaceMax: w.targetPaceMax,
+      actualDistanceKm: w.actualDistanceKm,
+      actualPace: w.actualPace,
+      actualDurationMinutes: w.actualDurationMinutes,
+      actualHeartRate: w.actualHeartRate,
+      feedback: w.feedback,
+      proofImageUrl: w.proofImageUrl,
+      isCompleted: w.isCompleted,
+      completedAt: w.completedAt,
+      updatedAt: w.updatedAt,
+      date: w.trainingDay.date,
+      dayOfWeek: w.trainingDay.dayOfWeek,
+      weekTitle: w.trainingDay.week.title,
+      athlete: {
+        id: w.trainingDay.week.user.id,
+        name: w.trainingDay.week.user.name,
+        email: w.trainingDay.week.user.email,
+        phone: w.trainingDay.week.user.phone
+      }
+    }));
+
+    return res.json({ results: formatted });
+  } catch (error) {
+    console.error('[GET WORKOUT RESULTS] Erro:', error);
+    return res.status(500).json({ error: 'Erro ao buscar resultados dos treinos.' });
+  }
+}
+
+/**
+ * Remove resultado de treino (desmarcar conclusão)
+ */
+export async function resetWorkoutResult(req: Request, res: Response) {
+  try {
+    const workoutId = String(req.params.id);
+    const updated = await prisma.workout.update({
+      where: { id: workoutId },
+      data: {
+        actualDistanceKm: null,
+        actualPace: null,
+        actualDurationMinutes: null,
+        actualHeartRate: null,
+        feedback: null,
+        proofImageUrl: null,
+        isCompleted: false,
+        completedAt: null
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Resultado do treino revertido com sucesso.',
+      workout: updated
+    });
+  } catch (error) {
+    console.error('[RESET WORKOUT RESULT] Erro:', error);
+    return res.status(500).json({ error: 'Erro ao resetar resultado.' });
+  }
+}

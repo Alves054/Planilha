@@ -1,10 +1,10 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -12,6 +12,17 @@ model User {
   id                String             @id @default(uuid())
   email             String             @unique
   name              String
+  password          String             @default("123456")
+  role              String             @default("ATHLETE") // COACH, ATHLETE
+  phone             String?
+  notes             String?
+  paceLeve          String?            @default("5:10–5:40/km")
+  paceModerado      String?            @default("4:40–5:10/km")
+  paceControlado    String?            @default("3:50–4:10/km")
+  paceTiros         String?            @default("3:00–3:30/km")
+  coachId           String?
+  coach             User?              @relation("CoachAthletes", fields: [coachId], references: [id], onDelete: SetNull)
+  athletes          User[]             @relation("CoachAthletes")
   weeks             Week[]
   garminConnections GarminConnection[]
   syncLogs          SyncLog[]
@@ -68,6 +79,15 @@ model Workout {
   targetHeartRateZone  String?
   repeatCount          Int           @default(1)
   notes                String?
+  // Resultados da Execução do Aluno (Manual ou Foto/Print)
+  actualDistanceKm     Float?
+  actualPace           String?       // ex: "5:08"
+  actualDurationMinutes Float?      // ex: 52
+  actualHeartRate      Int?          // bpm médio
+  feedback             String?       // Feedback/comentários do aluno sobre a sensação do treino
+  proofImageUrl        String?       // Foto do relógio/print do strava ou comprovante
+  completedAt          DateTime?     // Quando o treino foi realizado
+  isCompleted          Boolean       @default(false)
   syncStatus           String        @default("RASCUNHO") // RASCUNHO, CONFIRMADO, PRONTO_PARA_SINCRONIZAR, ENVIANDO, SINCRONIZADO, ERRO
   garminWorkoutId      String?
   syncHash             String?       // Hash para controle de alteração pós-sincronização

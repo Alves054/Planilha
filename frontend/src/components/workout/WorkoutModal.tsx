@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Dumbbell, Calendar, Clock, Zap, Save, HelpCircle } from 'lucide-react';
-import { Workout, TrainingDay, WorkoutCategory, WorkoutPeriod, WorkoutStep } from '../../types/workout';
+import { Workout, TrainingDay, WorkoutCategory, WorkoutPeriod, WorkoutStep, PaceZones } from '../../types/workout';
 import { StepBuilder } from './StepBuilder';
 
 interface WorkoutModalProps {
@@ -10,7 +10,19 @@ interface WorkoutModalProps {
   trainingDays: TrainingDay[];
   selectedDayId?: string;
   initialWorkout?: Workout | null;
+  paceZones?: PaceZones;
+  athleteName?: string;
 }
+
+const parsePaceRange = (paceStr?: string): { min: string; max: string } => {
+  if (!paceStr) return { min: '', max: '' };
+  const cleaned = paceStr.replace(/\/km/i, '').trim();
+  const parts = cleaned.split(/[–\-]/);
+  if (parts.length >= 2) {
+    return { min: parts[0].trim(), max: parts[1].trim() };
+  }
+  return { min: cleaned, max: cleaned };
+};
 
 export const WorkoutModal: React.FC<WorkoutModalProps> = ({
   isOpen,
@@ -18,7 +30,9 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
   onSave,
   trainingDays,
   selectedDayId,
-  initialWorkout
+  initialWorkout,
+  paceZones,
+  athleteName
 }) => {
   const [trainingDayId, setTrainingDayId] = useState<string>('');
   const [name, setName] = useState<string>('');
@@ -32,6 +46,12 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
   const [repeatCount, setRepeatCount] = useState<number>(1);
   const [steps, setSteps] = useState<WorkoutStep[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const applyZonePace = (zoneStr?: string) => {
+    const { min, max } = parsePaceRange(zoneStr);
+    if (min) setTargetPaceMin(min);
+    if (max) setTargetPaceMax(max);
+  };
 
   useEffect(() => {
     if (initialWorkout) {
@@ -197,39 +217,77 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
           </div>
 
           {/* Distance & Pace Range */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/80">
-            <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1">Distância Alvo (km)</label>
-              <input
-                type="number"
-                step="0.1"
-                placeholder="Ex: 10.5"
-                value={targetDistanceKm}
-                onChange={(e) => setTargetDistanceKm(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500"
-              />
+          <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/80 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Distância Alvo (km)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="Ex: 10.5"
+                  value={targetDistanceKm}
+                  onChange={(e) => setTargetDistanceKm(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Pace Mínimo (MM:SS)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 4:40"
+                  value={targetPaceMin}
+                  onChange={(e) => setTargetPaceMin(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Pace Máximo (MM:SS)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 5:10"
+                  value={targetPaceMax}
+                  onChange={(e) => setTargetPaceMax(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1">Pace Mínimo (MM:SS)</label>
-              <input
-                type="text"
-                placeholder="Ex: 4:40"
-                value={targetPaceMin}
-                onChange={(e) => setTargetPaceMin(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1">Pace Máximo (MM:SS)</label>
-              <input
-                type="text"
-                placeholder="Ex: 5:10"
-                value={targetPaceMax}
-                onChange={(e) => setTargetPaceMax(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-100 font-mono focus:outline-none focus:border-blue-500"
-              />
+            {/* Atalhos Rápidos com Zonas de Ritmo do Aluno */}
+            <div className="pt-2 border-t border-zinc-800/60 flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-[11px] text-zinc-400 font-semibold flex items-center gap-1 mr-1">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                Pace do Aluno:
+              </span>
+              <button
+                type="button"
+                onClick={() => applyZonePace(paceZones?.paceLeve || '5:10–5:40/km')}
+                className="px-2 py-1 rounded-md text-[11px] font-mono font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer"
+              >
+                Leve ({paceZones?.paceLeve || '5:10–5:40'})
+              </button>
+              <button
+                type="button"
+                onClick={() => applyZonePace(paceZones?.paceModerado || '4:40–5:10/km')}
+                className="px-2 py-1 rounded-md text-[11px] font-mono font-medium bg-teal-500/15 text-teal-300 border border-teal-500/30 hover:bg-teal-500/25 transition-all cursor-pointer"
+              >
+                Moderado ({paceZones?.paceModerado || '4:40–5:10'})
+              </button>
+              <button
+                type="button"
+                onClick={() => applyZonePace(paceZones?.paceControlado || '3:50–4:10/km')}
+                className="px-2 py-1 rounded-md text-[11px] font-mono font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-all cursor-pointer"
+              >
+                Controlado ({paceZones?.paceControlado || '3:50–4:10'})
+              </button>
+              <button
+                type="button"
+                onClick={() => applyZonePace(paceZones?.paceTiros || '3:00–3:30/km')}
+                className="px-2 py-1 rounded-md text-[11px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/35 hover:bg-rose-500/30 transition-all cursor-pointer"
+              >
+                Tiros ({paceZones?.paceTiros || '3:00–3:30'})
+              </button>
             </div>
           </div>
 
@@ -239,6 +297,7 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
             repeatCount={repeatCount}
             onStepsChange={setSteps}
             onRepeatCountChange={setRepeatCount}
+            paceZones={paceZones}
           />
 
           {/* Notes */}

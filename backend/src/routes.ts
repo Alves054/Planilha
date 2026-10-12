@@ -1,17 +1,38 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { getCurrentWeek, listWeeks, createWeek } from './controllers/weekController.js';
-import { createWorkout, updateWorkout, deleteWorkout, duplicateWorkout } from './controllers/workoutController.js';
+import { login, getMe, listAthletes, createAthlete, updateAthlete, deleteAthlete, updatePaceZones } from './controllers/authController.js';
+import { authMiddleware, optionalAuthMiddleware, requireCoach } from './middlewares/authMiddleware.js';
+import { createWorkout, updateWorkout, deleteWorkout, duplicateWorkout, submitWorkoutResult, getWorkoutResults, resetWorkoutResult } from './controllers/workoutController.js';
 import { getGarminStatus, toggleGarminMock, syncWeekWorkouts, getSyncLogs } from './controllers/garminController.js';
 import { getGarminAuthUrl, handleGarminCallback, disconnectGarmin } from './controllers/garminOAuthController.js';
 import { importPdfWorkouts } from './controllers/pdfController.js';
+import { importImageWorkouts } from './controllers/imageController.js';
 import { sendMessage, listConversations, getConversationDetails, createConversation, deleteConversation } from './controllers/aiController.js';
+
+// Multer — upload em memória para PDF e imagens
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
 
 export const routes = Router();
 
+// Autenticação & Perfil
+routes.post('/auth/login', login);
+routes.get('/auth/me', authMiddleware, getMe);
+
+// Gestão de Alunos (Painel do Professor)
+routes.get('/athletes', listAthletes);
+routes.post('/athletes', createAthlete);
+routes.put('/athletes/:id', updateAthlete);
+routes.put('/athletes/:id/pace-zones', updatePaceZones);
+routes.delete('/athletes/:id', deleteAthlete);
+
 // Semanas
-routes.get('/weeks/current', getCurrentWeek);
-routes.get('/weeks', listWeeks);
-routes.post('/weeks', createWeek);
+routes.get('/weeks/current', optionalAuthMiddleware, getCurrentWeek);
+routes.get('/weeks', optionalAuthMiddleware, listWeeks);
+routes.post('/weeks', optionalAuthMiddleware, createWeek);
 
 // Treinos
 routes.post('/workouts', createWorkout);
@@ -19,8 +40,25 @@ routes.put('/workouts/:id', updateWorkout);
 routes.delete('/workouts/:id', deleteWorkout);
 routes.post('/workouts/:id/duplicate', duplicateWorkout);
 
-// Importação de PDF
-routes.post('/pdf/import', importPdfWorkouts);
+// Resultados de Treinos (Manual / Foto / Comprovante)
+routes.get('/workout-results', getWorkoutResults);
+routes.post('/workouts/:id/result', upload.any(), (req, res, next) => {
+  if ((req as any).files?.length) (req as any).file = (req as any).files[0];
+  next();
+}, submitWorkoutResult);
+routes.delete('/workouts/:id/result', resetWorkoutResult);
+
+// Importação de PDF (aceita campo 'pdf', 'file' ou qualquer nome)
+routes.post('/pdf/import', upload.any(), (req, res, next) => {
+  if ((req as any).files?.length) (req as any).file = (req as any).files[0];
+  next();
+}, importPdfWorkouts);
+
+// Importação via Imagem (aceita campo 'image', 'file' ou qualquer nome)
+routes.post('/image/import', upload.any(), (req, res, next) => {
+  if ((req as any).files?.length) (req as any).file = (req as any).files[0];
+  next();
+}, importImageWorkouts);
 
 // Pace AI Chat & Conversas
 routes.post('/ai/chat', sendMessage);

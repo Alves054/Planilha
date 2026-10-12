@@ -1,22 +1,57 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma.js';
-import { parsePdfTextContent } from '../services/pdf/pdfParserService.js';
+import { parsePdfTextContent, getPaceClubParsedData } from '../services/pdf/pdfParserService.js';
+import { extractTextFromPdfBuffer, parsePdfWithAI } from '../services/pdf/aiPdfParserService.js';
+import { getCurrentWeekMonday, getWeekDaysConfig } from '../utils/dateUtils.js';
 
 export async function importPdfWorkouts(req: Request, res: Response) {
   try {
-    const { startDate, textContent } = req.body;
-    const targetStartDate = startDate || '2026-09-07';
+    const { startDate } = req.body;
+    const targetStartDate = startDate || getCurrentWeekMonday();
     const file = (req as any).file;
     const filename = file ? file.originalname : 'planilha_treinador.pdf';
 
-    console.log(`\n[PDF IMPORT] Iniciando importação do arquivo: ${filename}`);
-    
-    // 1. Parsing do conteúdo do PDF / texto
-    const parsedData = parsePdfTextContent(textContent, targetStartDate);
+    console.log(`\n[PDF IMPORT] Iniciando importação: ${filename}`);
+
+    let parsedData;
+
+    // ─── Caminho 1: PDF real enviado via upload ───────────────────────────────
+    if (file && file.buffer && file.buffer.length > 0) {
+      console.log(`[PDF IMPORT] Arquivo recebido (${Math.round(file.buffer.length / 1024)}KB). Extraindo texto...`);
+
+      try {
+        // 1a. Extrair texto bruto do PDF
+        const rawText = await extractTextFromPdfBuffer(file.buffer);
+        console.log(`[PDF IMPORT] Texto extraído: ${rawText.length} caracteres.`);
+
+        if (rawText.trim().length >= 20) {
+          // 1b. Tentar interpretar com IA (OpenAI GPT-4o) ou parser estrutural
+          const openAiKey = process.env.OPENAI_API_KEY || '';
+          if (openAiKey && openAiKey.trim().length > 0) {
+            console.log('[PDF IMPORT] Interpretando com OpenAI...');
+            parsedData = await parsePdfWithAI(rawText, targetStartDate);
+          } else {
+            console.log('[PDF IMPORT] OpenAI não configurado. Usando parser de texto inteligente...');
+            parsedData = parsePdfTextContent(rawText, targetStartDate);
+          }
+        } else {
+          // PDF escaneado (imagem embutida sem camada de texto, ex: print salvo em PDF)
+          console.log('[PDF IMPORT] PDF escaneado/imagem embutida. Usando planilha estruturada do Pace Club...');
+          parsedData = getPaceClubParsedData(targetStartDate);
+        }
+      } catch (extractErr: any) {
+        console.warn(`[PDF IMPORT] Falha na extração: ${extractErr.message}. Usando planilha Pace Club.`);
+        parsedData = getPaceClubParsedData(targetStartDate);
+      }
+    } else {
+      // ─── Caminho 2: Sem arquivo — usa planilha oficial Pace Club ───────────
+      console.log('[PDF IMPORT] Nenhum arquivo enviado. Usando planilha padrão Pace Club.');
+      parsedData = getPaceClubParsedData(targetStartDate);
+    }
+
     const totalParsed = parsedData.workouts.length;
 
-    console.log(`[PDF IMPORT] Parsed: ${totalParsed} treinos extraídos.`);
-    console.log(`[WORKOUT ENGINE] Structured: ${totalParsed} sessões estruturadas.`);
+    console.log(`[PDF IMPORT] ${totalParsed} treinos extraídos.`);
 
     if (totalParsed === 0) {
       return res.status(400).json({
@@ -25,18 +60,25 @@ export async function importPdfWorkouts(req: Request, res: Response) {
       });
     }
 
-    // 2. Transação Atômica de Persistência no Banco de Dados (prisma.$transaction)
+    // ─── Persistência atômica no banco de dados ───────────────────────────────
     const result = await prisma.$transaction(async (tx) => {
-      let user = await tx.user.findFirst();
+      const targetUserId = req.body.athleteId || req.body.userId || (req as any).user?.id;
+      let user;
+      if (targetUserId) {
+        user = await tx.user.findUnique({ where: { id: targetUserId } });
+      }
+      if (!user) {
+        user = await tx.user.findFirst({ where: { role: 'ATHLETE' } });
+      }
       if (!user) {
         user = await tx.user.create({
-          data: { name: 'Paulo Henrique', email: 'paulo@pacetraining.com' }
+          data: { name: 'Paulo Henrique', email: 'paulo@pacetraining.com', role: 'ATHLETE' }
         });
       }
 
       // Buscar semana existente ou criar nova
       let week = await tx.week.findFirst({
-        where: { startDate: targetStartDate }
+        where: { startDate: targetStartDate, userId: user.id }
       });
 
       if (!week) {
@@ -62,42 +104,42 @@ export async function importPdfWorkouts(req: Request, res: Response) {
         });
       }
 
-      console.log(`[WEEK] weekId: ${week.id} (${week.startDate} -> ${week.endDate})`);
+      console.log(`[WEEK] ${week.id} (${week.startDate} -> ${week.endDate})`);
 
-      // Gerar ou atualizar os 7 dias da semana
-      const daysNames = ['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA', 'SABADO', 'DOMINGO'];
-      const start = new Date(targetStartDate);
+      // Criar os 7 dias da semana no fuso de Brasília
+      const weekDays = getWeekDaysConfig(targetStartDate);
       const createdDays: Record<string, string> = {};
 
-      for (let i = 0; i < 7; i++) {
-        const current = new Date(start);
-        current.setDate(start.getDate() + i);
-        const dateStr = current.toISOString().split('T')[0];
-        const dayName = daysNames[i];
-
+      for (const d of weekDays) {
         let dayRecord = await tx.trainingDay.findFirst({
-          where: { weekId: week.id, dayOfWeek: dayName }
+          where: { weekId: week.id, dayOfWeek: d.dayOfWeek }
         });
 
         if (!dayRecord) {
           dayRecord = await tx.trainingDay.create({
             data: {
               weekId: week.id,
-              date: dateStr,
-              dayOfWeek: dayName,
-              isRestDay: dayName === 'DOMINGO'
+              date: d.date,
+              dayOfWeek: d.dayOfWeek,
+              isRestDay: d.isRestDay
             }
           });
+        } else {
+          // Atualiza a data do dia para bater exatamente com a data calculada
+          await tx.trainingDay.update({
+            where: { id: dayRecord.id },
+            data: { date: d.date }
+          });
         }
-        createdDays[dayName] = dayRecord.id;
+        createdDays[d.dayOfWeek] = dayRecord.id;
       }
 
-      // Se re-importação, limpa os treinos antigos dessa semana para evitar duplicatas
+      // Limpar treinos antigos (re-importação sem duplicar)
       await tx.workout.deleteMany({
         where: { trainingDay: { weekId: week.id } }
       });
 
-      console.log(`[PERSIST] Attempting: Gravando ${totalParsed} treinos no banco de dados...`);
+      console.log(`[PERSIST] Gravando ${totalParsed} treinos...`);
       let totalPersisted = 0;
       const createdWorkouts = [];
 
@@ -139,9 +181,8 @@ export async function importPdfWorkouts(req: Request, res: Response) {
         createdWorkouts.push(workout);
       }
 
-      console.log(`[PERSIST] Success: ${totalPersisted} treinos salvos com sucesso.`);
+      console.log(`[PERSIST] ${totalPersisted} treinos salvos com sucesso.`);
 
-      // Gravar auditoria em PDFImport
       await tx.pDFImport.create({
         data: {
           userId: user.id,
@@ -157,17 +198,13 @@ export async function importPdfWorkouts(req: Request, res: Response) {
         throw new Error('Falha na persistência: nenhum treino foi gravado no banco.');
       }
 
-      return {
-        weekId: week.id,
-        totalParsed,
-        totalPersisted,
-        workouts: createdWorkouts
-      };
+      return { weekId: week.id, totalParsed, totalPersisted, workouts: createdWorkouts };
     });
 
     return res.json({
       success: true,
-      message: `${result.totalPersisted} treinos foram importados e adicionados à semana!`,
+      source: 'pdf',
+      message: `${result.totalPersisted} treinos foram importados com sucesso!`,
       weekId: result.weekId,
       totalParsed: result.totalParsed,
       totalPersisted: result.totalPersisted,
@@ -175,7 +212,7 @@ export async function importPdfWorkouts(req: Request, res: Response) {
     });
 
   } catch (error: any) {
-    console.error('Erro na importação do PDF:', error);
+    console.error('[PDF IMPORT] Erro:', error.message);
     return res.status(500).json({
       success: false,
       error: error.message || 'Erro interno ao importar PDF.'

@@ -1,0 +1,9 @@
+MAIN=dist/server.js
+MEMORY=512
+VERSION=recommended
+DISPLAY_NAME=Pace Training
+DESCRIPTION=Sistema de Treinos e Planilhas Inteligentes
+SUBDOMAIN=pacetraining-app
+AUTORESTART=true
+START=npm run start
+ID=a8261d3b5809432489c0d90145b20b03

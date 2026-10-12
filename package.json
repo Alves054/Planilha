@@ -5,6 +5,9 @@
   "description": "Pace Training - Plataforma de Gerenciamento, Assistente Pace AI & Integracao Garmin",
   "scripts": {
     "dev": "cd backend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "test": "cd backend && npm run test:garmin && npm run test:pdf && npm run test:ai",
     "build": "cd backend && npm run build && cd ../frontend && npm run build",
     "vercel-build": "cd backend && npm install && npx prisma generate && npm run build && cd ../frontend && npm install && npm run build"
   }

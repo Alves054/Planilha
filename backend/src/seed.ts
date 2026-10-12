@@ -1,51 +1,118 @@
+import bcrypt from 'bcryptjs';
 import { prisma } from './prisma.js';
+import { getCurrentWeekMonday, getWeekSunday, getWeekDaysConfig } from './utils/dateUtils.js';
 
 export async function seedInitialData() {
-  const userCount = await prisma.user.count();
-  if (userCount > 0) {
-    console.log('Banco de dados já possui registros.');
+  const adminEmail = 'ph2835809@gmail.com';
+  const adminPass = '123456';
+  const hashedAdminPassword = await bcrypt.hash(adminPass, 10);
+
+  // Garantir existência do Administrador/Treinador Principal
+  let coach = await prisma.user.findUnique({
+    where: { email: adminEmail }
+  });
+
+  if (!coach) {
+    // Se havia o coach antigo, atualiza ou cria
+    const oldCoach = await prisma.user.findFirst({ where: { role: 'COACH' } });
+    if (oldCoach) {
+      coach = await prisma.user.update({
+        where: { id: oldCoach.id },
+        data: {
+          email: adminEmail,
+          name: 'Administrador (Paulo Henrique)',
+          password: hashedAdminPassword,
+          role: 'COACH'
+        }
+      });
+      console.log(`✅ Administrador atualizado: ${adminEmail}`);
+    } else {
+      coach = await prisma.user.create({
+        data: {
+          email: adminEmail,
+          name: 'Administrador (Paulo Henrique)',
+          password: hashedAdminPassword,
+          role: 'COACH',
+          phone: '(11) 98765-4321',
+          notes: 'Administrador do Sistema'
+        }
+      });
+      console.log(`✅ Administrador criado: ${adminEmail}`);
+    }
+  } else {
+    // Atualiza a senha e role
+    coach = await prisma.user.update({
+      where: { id: coach.id },
+      data: {
+        password: hashedAdminPassword,
+        role: 'COACH'
+      }
+    });
+  }
+
+  // Garantir existência do Aluno Paulo Henrique
+  let athlete = await prisma.user.findFirst({
+    where: { email: 'paulo@pacetraining.com' }
+  });
+
+  if (!athlete) {
+    const athletePassword = await bcrypt.hash('123456', 10);
+    athlete = await prisma.user.create({
+      data: {
+        email: 'paulo@pacetraining.com',
+        name: 'Paulo Henrique',
+        password: athletePassword,
+        role: 'ATHLETE',
+        phone: '(11) 99999-8888',
+        notes: 'Atleta focado em 5km/10km e Meia Maratona',
+        coachId: coach.id
+      }
+    });
+    console.log('✅ Aluno criado: paulo@pacetraining.com / senha: 123456');
+  } else {
+    // Atualizar coachId e role se necessário
+    if (athlete.role !== 'ATHLETE' || !athlete.coachId) {
+      await prisma.user.update({
+        where: { id: athlete.id },
+        data: {
+          role: 'ATHLETE',
+          coachId: coach.id
+        }
+      });
+    }
+  }
+
+  // Se já houver semanas cadastradas, finaliza
+  const weekCount = await prisma.week.count();
+  if (weekCount > 0) {
     return;
   }
 
-  console.log('Semeando dados iniciais do Pace Training...');
-
-  const user = await prisma.user.create({
-    data: {
-      email: 'paulo@pacetraining.com',
-      name: 'Paulo Henrique'
-    }
-  });
-
   await prisma.garminConnection.create({
     data: {
-      userId: user.id,
+      userId: athlete.id,
       accountName: 'Paulo Henrique (Garmin Mock)',
       connected: true,
       mode: 'mock'
     }
   });
 
+  const mondayStr = getCurrentWeekMonday();
+  const sundayStr = getWeekSunday(mondayStr);
+
   const week = await prisma.week.create({
     data: {
-      userId: user.id,
+      userId: athlete.id,
       title: 'Semana 01 - Base Aeróbia & Volume',
-      startDate: '2026-09-07',
-      endDate: '2026-09-13',
+      startDate: mondayStr,
+      endDate: sundayStr,
       plannedVolumeKm: 90,
       originalPdfVolume: '≈ 90 km',
       status: 'EM_ANDAMENTO'
     }
   });
 
-  const daysConfig = [
-    { date: '2026-09-07', dayOfWeek: 'SEGUNDA', isRestDay: false },
-    { date: '2026-09-08', dayOfWeek: 'TERCA', isRestDay: false },
-    { date: '2026-09-09', dayOfWeek: 'QUARTA', isRestDay: false },
-    { date: '2026-09-10', dayOfWeek: 'QUINTA', isRestDay: false },
-    { date: '2026-09-11', dayOfWeek: 'SEXTA', isRestDay: false },
-    { date: '2026-09-12', dayOfWeek: 'SABADO', isRestDay: false },
-    { date: '2026-09-13', dayOfWeek: 'DOMINGO', isRestDay: true }
-  ];
+  const daysConfig = getWeekDaysConfig(mondayStr);
 
   const createdDays: Record<string, string> = {};
 

@@ -6,9 +6,10 @@ interface SummaryCardsProps {
   week: Week | null;
   metrics: WeekMetrics | null;
   onNewWeek: () => void;
+  isCoach?: boolean;
 }
 
-export const SummaryCards: React.FC<SummaryCardsProps> = ({ week, metrics, onNewWeek }) => {
+export const SummaryCards: React.FC<SummaryCardsProps> = ({ week, metrics, onNewWeek, isCoach = true }) => {
   if (!week || !metrics) return null;
 
   const formatDate = (dateStr: string) => {
@@ -43,12 +44,14 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ week, metrics, onNew
           </div>
         </div>
 
-        <button
-          onClick={onNewWeek}
-          className="self-start md:self-auto px-4 py-2 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors"
-        >
-          + Nova Semana
-        </button>
+        {isCoach && (
+          <button
+            onClick={onNewWeek}
+            className="self-start md:self-auto px-4 py-2 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors cursor-pointer"
+          >
+            + Nova Semana
+          </button>
+        )}
       </div>
 
       {/* Grid of Metric Cards */}
