@@ -54,26 +54,39 @@ export async function getMe(req: Request, res: Response) {
       return res.status(401).json({ error: 'Não autenticado.' });
     }
 
+    const userSelect: any = {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      phone: true,
+      notes: true,
+      coachId: true
+    };
+    try {
+      const userModel = (prisma as any).user;
+      if (userModel?.fields && 'paceLeve' in userModel.fields) {
+        userSelect.paceLeve = true;
+        userSelect.paceModerado = true;
+        userSelect.paceControlado = true;
+        userSelect.paceTiros = true;
+      }
+    } catch (e) {}
+
     const user = await prisma.user.findUnique({
       where: { id: authUser.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        phone: true,
-        notes: true,
-        paceLeve: true,
-        paceModerado: true,
-        paceControlado: true,
-        paceTiros: true,
-        coachId: true
-      }
+      select: userSelect
     });
 
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
+
+    const u = user as any;
+    u.paceLeve = u.paceLeve || '5:10–5:40/km';
+    u.paceModerado = u.paceModerado || '4:40–5:10/km';
+    u.paceControlado = u.paceControlado || '3:50–4:10/km';
+    u.paceTiros = u.paceTiros || '3:00–3:30/km';
 
     return res.json({ user });
   } catch (error: any) {
@@ -81,34 +94,44 @@ export async function getMe(req: Request, res: Response) {
   }
 }
 
+function getAthleteSelectFields(): any {
+  const select: any = {
+    id: true,
+    name: true,
+    email: true,
+    phone: true,
+    notes: true,
+    createdAt: true,
+    weeks: {
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+      select: {
+        id: true,
+        title: true,
+        plannedVolumeKm: true,
+        startDate: true,
+        endDate: true,
+        status: true
+      }
+    }
+  };
+  try {
+    const userModel = (prisma as any).user;
+    if (userModel?.fields && 'paceLeve' in userModel.fields) {
+      select.paceLeve = true;
+      select.paceModerado = true;
+      select.paceControlado = true;
+      select.paceTiros = true;
+    }
+  } catch (e) {}
+  return select;
+}
+
 export async function listAthletes(req: Request, res: Response) {
   try {
     const athletes = await prisma.user.findMany({
       where: { role: 'ATHLETE' },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        notes: true,
-        paceLeve: true,
-        paceModerado: true,
-        paceControlado: true,
-        paceTiros: true,
-        createdAt: true,
-        weeks: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            title: true,
-            plannedVolumeKm: true,
-            startDate: true,
-            endDate: true,
-            status: true
-          }
-        }
-      },
+      select: getAthleteSelectFields(),
       orderBy: { name: 'asc' }
     });
 

@@ -3,6 +3,25 @@ import { prisma } from '../prisma.js';
 import { calculateWeekMetrics } from '../engine/workoutEngine.js';
 import { getCurrentWeekMonday, getWeekSunday, getWeekDaysConfig } from '../utils/dateUtils.js';
 
+function getUserSelectFields(): any {
+  const select: any = {
+    id: true,
+    name: true,
+    email: true,
+    role: true
+  };
+  try {
+    const userModel = (prisma as any).user;
+    if (userModel?.fields && 'paceLeve' in userModel.fields) {
+      select.paceLeve = true;
+      select.paceModerado = true;
+      select.paceControlado = true;
+      select.paceTiros = true;
+    }
+  } catch (e) {}
+  return select;
+}
+
 export async function getCurrentWeek(req: Request, res: Response) {
   try {
     const { userId, athleteId } = req.query;
@@ -38,16 +57,7 @@ export async function getCurrentWeek(req: Request, res: Response) {
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-              paceLeve: true,
-              paceModerado: true,
-              paceControlado: true,
-              paceTiros: true
-            }
+          select: getUserSelectFields()
         },
         trainingDays: {
           orderBy: { date: 'asc' },
@@ -95,16 +105,7 @@ export async function getCurrentWeek(req: Request, res: Response) {
           where: { id: week.id },
           include: {
             user: {
-                select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-              paceLeve: true,
-              paceModerado: true,
-              paceControlado: true,
-              paceTiros: true
-            }
+              select: getUserSelectFields()
             },
             trainingDays: {
               orderBy: { date: 'asc' },
@@ -166,16 +167,7 @@ export async function getCurrentWeek(req: Request, res: Response) {
         where: { id: newWeek.id },
         include: {
           user: {
-              select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-              paceLeve: true,
-              paceModerado: true,
-              paceControlado: true,
-              paceTiros: true
-            }
+            select: getUserSelectFields()
           },
           trainingDays: {
             orderBy: { date: 'asc' },
@@ -192,6 +184,14 @@ export async function getCurrentWeek(req: Request, res: Response) {
 
     if (!week) {
       return res.status(404).json({ error: 'Erro ao carregar semana do atleta.' });
+    }
+
+    if (week.user) {
+      const u = week.user as any;
+      u.paceLeve = u.paceLeve || '5:10–5:40/km';
+      u.paceModerado = u.paceModerado || '4:40–5:10/km';
+      u.paceControlado = u.paceControlado || '3:50–4:10/km';
+      u.paceTiros = u.paceTiros || '3:00–3:30/km';
     }
 
     const metrics = calculateWeekMetrics(week);
