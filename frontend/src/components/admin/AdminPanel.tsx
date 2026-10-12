@@ -536,7 +536,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             </div>
                             {athlete.latestWeek ? (
                               <div className="text-xs text-zinc-200 font-bold truncate">
-                                {athlete.latestWeek.title || 'Semana de Treinos'}
+                                {athlete.latestWeek.title
+                                  ? (athlete.latestWeek.title.includes('Paulo Henrique') && athlete.name !== 'Paulo Henrique'
+                                      ? athlete.latestWeek.title.replace(/Paulo Henrique/g, athlete.name)
+                                      : (!athlete.latestWeek.title.toLowerCase().includes(athlete.name.toLowerCase()) && /\([^)]+\)$/.test(athlete.latestWeek.title)
+                                          ? athlete.latestWeek.title.replace(/\([^)]+\)$/, `(${athlete.name})`)
+                                          : athlete.latestWeek.title))
+                                  : `Semana de Treinos (${athlete.name})`}
                               </div>
                             ) : (
                               <div className="text-xs text-zinc-500 italic">
@@ -1026,7 +1032,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="ex: Paulo Henrique"
+                  placeholder="ex: Hugo Henrique"
                   required
                   className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 focus:border-indigo-500 text-xs text-white outline-none"
                 />

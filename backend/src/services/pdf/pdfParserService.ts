@@ -567,9 +567,11 @@ export function getHugoHenrique7kmParsedData(referenceStartDate: string = '2026-
  * Planilha oficial do Pace Club (Treinador Leandro Prates / Atleta Paulo Henrique)
  * Volume semanal: ~83 km (+ aquecimentos por tempo)
  */
-export function getPaceClubParsedData(referenceStartDate: string = getCurrentWeekMonday()): ParsedPdfResult {
+export function getPaceClubParsedData(referenceStartDate: string = getCurrentWeekMonday(), athleteName?: string): ParsedPdfResult {
+  const athleteLabel = athleteName ? ` (${athleteName})` : '';
   return {
-    title: 'Semana 01 - Pace Club (Paulo Henrique)',
+    title: `Semana 01 - Pace Club${athleteLabel}`,
+    athleteName,
     startDate: referenceStartDate,
     endDate: calculateEndDate(referenceStartDate),
     plannedVolumeKm: 83,

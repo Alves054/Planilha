@@ -136,11 +136,25 @@ export async function importImageWorkouts(req: Request, res: Response) {
         where: { startDate: effectiveStartDate, userId: user.id }
       });
 
+      // Garante que o título use o nome do aluno da semana e nunca um nome hardcoded de outro aluno
+      let weekTitle = parsedData.title;
+      if (user?.name) {
+        if (weekTitle.includes('Paulo Henrique') && user.name !== 'Paulo Henrique') {
+          weekTitle = weekTitle.replace(/Paulo Henrique/g, user.name);
+        } else if (!weekTitle.toLowerCase().includes(user.name.toLowerCase())) {
+          if (/\([^)]+\)$/.test(weekTitle)) {
+            weekTitle = weekTitle.replace(/\([^)]+\)$/, `(${user.name})`);
+          } else {
+            weekTitle = `${weekTitle} (${user.name})`;
+          }
+        }
+      }
+
       if (!week) {
         week = await tx.week.create({
           data: {
             userId: user.id,
-            title: parsedData.title,
+            title: weekTitle,
             startDate: effectiveStartDate,
             endDate: parsedData.endDate,
             plannedVolumeKm: parsedData.plannedVolumeKm,
@@ -152,7 +166,7 @@ export async function importImageWorkouts(req: Request, res: Response) {
         await tx.week.update({
           where: { id: week.id },
           data: {
-            title: parsedData.title,
+            title: weekTitle,
             plannedVolumeKm: parsedData.plannedVolumeKm,
             originalPdfVolume: parsedData.originalPdfVolume
           }

@@ -19,6 +19,24 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ week, metrics, onNew
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
+  const getDisplayTitle = () => {
+    if (!week) return 'Semana de Treinamento';
+    let t = week.title || 'Semana de Treinamento';
+    const studentName = week.user?.name;
+    if (studentName) {
+      if (t.includes('Paulo Henrique') && studentName !== 'Paulo Henrique') {
+        t = t.replace(/Paulo Henrique/g, studentName);
+      } else if (!t.toLowerCase().includes(studentName.toLowerCase())) {
+        if (/\([^)]+\)$/.test(t)) {
+          t = t.replace(/\([^)]+\)$/, `(${studentName})`);
+        } else {
+          t = `${t} (${studentName})`;
+        }
+      }
+    }
+    return t;
+  };
+
   return (
     <div className="space-y-4 mb-8">
       {/* Top Banner with Week Title & Date Range */}
@@ -30,7 +48,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ week, metrics, onNew
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-white tracking-tight">
-                {week.title || 'Semana de Treinamento'}
+                {getDisplayTitle()}
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 {week.status}

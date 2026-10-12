@@ -215,7 +215,7 @@ export function App() {
     );
   }
 
-  const activeAthleteName = selectedAthlete?.name || (currentUser?.role === 'ATHLETE' ? currentUser.name : week?.user?.name || 'Paulo Henrique');
+  const activeAthleteName = selectedAthlete?.name || (currentUser?.role === 'ATHLETE' ? currentUser.name : week?.user?.name || 'Aluno');
   const activeAthlete = week?.user || selectedAthlete || (currentUser?.role === 'ATHLETE' ? currentUser : null);
   const currentPaceZones = {
     paceLeve: activeAthlete?.paceLeve || selectedAthlete?.paceLeve || '5:10–5:40/km',

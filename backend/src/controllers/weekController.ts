@@ -226,6 +226,17 @@ export async function getCurrentWeek(req: Request, res: Response) {
       u.paceModerado = u.paceModerado || '4:40–5:10/km';
       u.paceControlado = u.paceControlado || '3:50–4:10/km';
       u.paceTiros = u.paceTiros || '3:00–3:30/km';
+
+      const studentName = (u as any)?.name;
+      if (week.title && typeof studentName === 'string') {
+        if (week.title.includes('Paulo Henrique') && studentName !== 'Paulo Henrique') {
+          week.title = week.title.replace(/Paulo Henrique/g, studentName);
+        } else if (!week.title.toLowerCase().includes(studentName.toLowerCase())) {
+          if (/\([^)]+\)$/.test(week.title)) {
+            week.title = week.title.replace(/\([^)]+\)$/, `(${studentName})`);
+          }
+        }
+      }
     }
 
     const metrics = calculateWeekMetrics(week);
@@ -296,7 +307,11 @@ export async function createWeek(req: Request, res: Response) {
     const week = await prisma.week.create({
       data: {
         userId: user.id,
-        title: title || `Semana ${startDate}`,
+        title: title
+          ? (title.includes('Paulo Henrique') && user.name !== 'Paulo Henrique'
+              ? title.replace(/Paulo Henrique/g, user.name)
+              : title)
+          : `Semana ${startDate} - ${user.name}`,
         startDate,
         endDate,
         plannedVolumeKm: parseFloat(plannedVolumeKm) || 0,
